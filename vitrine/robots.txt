@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /admin.html
+Disallow: /api/
 
 Sitemap: https://vigie-seo.pages.dev/sitemap.xml
