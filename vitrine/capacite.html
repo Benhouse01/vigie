@@ -88,7 +88,12 @@ p{max-width:72ch}
 /* ⛔ Un chiffre qui change dix fois par seconde fait sauter la mise en page si sa largeur
    n est pas figee : les tuiles voisines bougeraient a chaque incrementation. */
 .tuile .n{min-height:1.15em;font-feature-settings:"tnum" 1}
-.tuile.monte .n{color:var(--ok)}
+/* ⛔ UN COMPTEUR LENT A L AIR MORT MEME QUAND IL EST JUSTE. « Sites deja lus »
+   n avance que de 0,15 par seconde, soit un toutes les sept secondes : sans signal,
+   on croit qu il est casse. Un eclat bref au moment ou le chiffre change dit « il a
+   bouge », sans inventer un mouvement qui n existe pas. */
+.tuile .n{transition:color .12s ease}
+.tuile .n.eclat{color:var(--ok)}
 .tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:20px}
 .tuile{background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);padding:17px 19px}
 .tuile .n{font-size:26px;font-weight:700;letter-spacing:-.9px;font-variant-numeric:tabular-nums;line-height:1.15}
@@ -182,21 +187,36 @@ footer a{color:var(--texte2)}
 </div></section>
 
 <section><div class="env">
-  <h2>Pourquoi ça peut quand même vous servir</h2>
-  <p>Ils crawlent le web entier <strong>pour tout le monde</strong>. Ce moteur crawle un
-  périmètre choisi : votre site, vos concurrents, et les quelques milliers de domaines qui les
-  citent. Ce périmètre représente un à deux millions de pages, soit moins d'une journée de
-  crawl à notre cadence.</p>
+  <h2>Ils font le tour du monde, nous faisons le tour de votre rue</h2>
+  <p class="sous">C'est toute la différence, et elle joue en votre faveur plus souvent
+  qu'on ne croit.</p>
 
-  <p>Une fois ce périmètre couvert, ce n'est plus de la découverte, c'est du rafraîchissement.
-  On peut y repasser <strong>plusieurs fois par jour</strong>, là où un index mondial met des
-  semaines à revenir sur un petit site. C'est le seul terrain où un outil gratuit peut faire
-  mieux qu'un abonnement : pas la couverture, la <strong>fréquence sur un périmètre étroit</strong>.</p>
+  <p>Un outil payant crawle le web entier, pour tous ses clients à la fois. Comme il a des
+  milliards de pages à couvrir, <strong>il ne repasse chez vous que rarement</strong> :
+  quelques semaines entre deux visites sur un site qui n'est pas connu. Un lien que vous
+  venez d'obtenir peut mettre un mois à apparaître dans leur outil. Un lien que vous avez
+  perdu peut y rester affiché aussi longtemps.</p>
 
-  <div class="encart bon"><strong>Et l'index est un bien commun.</strong> Chaque domaine
-  analysé par quelqu'un élargit le périmètre pour tous les suivants. C'est la seule source qui
-  s'améliore toute seule avec le nombre d'utilisateurs, et c'est ce qui rattrape, lentement, une
-  partie de l'écart.</div>
+  <p>Ce moteur, lui, ne s'occupe que de <strong>votre monde</strong> : votre site, vos
+  concurrents, et les quelques milliers de sites qui parlent d'eux. C'est un périmètre mille
+  fois plus petit, donc on en fait le tour en moins d'une journée. Ensuite on recommence, et
+  on recommence encore. <strong>Plusieurs passages par jour au lieu d'un par mois.</strong></p>
+
+  <div class="encart bon"><strong>Concrètement, pour vous.</strong> Vous obtenez un lien
+  aujourd'hui, il apparaît ici dans la journée. Un partenaire retire son lien sans vous
+  prévenir, vous le voyez tout de suite au lieu de le découvrir des semaines plus tard.
+  C'est le seul terrain où un outil gratuit bat un abonnement : pas la taille de l'index,
+  la <strong>fraîcheur sur ce qui vous concerne</strong>.</div>
+
+  <h3 style="margin-top:34px;font-size:19px;letter-spacing:-.3px">Et la zone surveillée
+  grandit avec les utilisateurs</h3>
+  <p>Quand quelqu'un analyse un domaine, ce domaine et son voisinage entrent dans la zone
+  que le robot surveille. <strong>Ils y restent, pour tout le monde.</strong> Le suivant qui
+  cherche un site du même secteur trouve donc plus que le précédent, sans rien avoir à faire.</p>
+  <p>C'est l'inverse d'un abonnement, où chaque client paie pour accéder aux mêmes données
+  fermées. Ici chaque utilisateur agrandit le terrain commun. Ça ne comblera jamais tout
+  l'écart avec un crawl à dix milliards de pages par jour, mais ça le réduit un peu chaque
+  jour, et sans que personne paie.</p>
 </div></section>
 
 <section><div class="env">
@@ -273,19 +293,34 @@ function quand(s){
       Passe trois intervalles sans releve, il s arrete et le point cesse de battre.
 */
 var INTERVALLE = 15000;
+/* L ordre suit la vitesse REELLE mesuree le 21/08/2026 : les liens montent de 359 par
+   seconde, les pages de 32, les domaines cibles de 7, les sites deja lus de 0,15. Mettre
+   les rapides en tete donne du mouvement des la premiere seconde de lecture. */
 var CLES = [
-  ['liens_indexes', 'liens dans l’index'],
-  ['domaines_cibles', 'domaines cibles vus'],
+  ['liens_indexes', 'liens dans l\u2019index'],
   ['pages_depuis_le_debut', 'pages ouvertes en tout'],
-  ['domaines_sources', 'sites déjà lus'],
-  ['liens_confirmes', 'liens servis par le site'],
   ['pages_en_file', 'pages en attente'],
+  ['domaines_cibles', 'domaines cibles vus'],
+  ['domaines_sources', 'sites diff\u00e9rents d\u00e9j\u00e0 lus'],
+  ['liens_confirmes', 'liens servis par le site'],
 ];
 
+/*
+   ⛔ LA VITESSE SE CALCULE ENTRE DEUX MESURES DISTINCTES, PAS ENTRE DEUX RELEVES.
+      Le serveur publie une fois par minute, la page relit toutes les quinze secondes :
+      trois relevés sur quatre rendent exactement les mêmes chiffres. En calculant une
+      vitesse à chaque relevé, on divise donc trois fois sur quatre un écart nul par
+      quinze secondes, la vitesse lissée tombe à zéro, et le compteur se fige puis
+      saute d un coup à la minute suivante. Ça se voit surtout sur les compteurs qui
+      montent lentement, comme le nombre de sites déjà lus.
+      On ne recalcule donc que lorsque l horodatage de la mesure a CHANGE, et sur le
+      temps écoulé entre ces deux mesures-là.
+*/
 var etat = {
-  reel: null,        // dernieres valeurs mesurees
-  quand: 0,          // date de ce releve
-  vitesse: {},       // unites par milliseconde, constatees entre deux releves
+  reel: null,               // valeurs de la derniere mesure distincte
+  quand: 0,                 // heure locale a laquelle on l a recue
+  mesurePrecedente: null,   // horodatage serveur de cette mesure
+  vitesse: {},              // unites par milliseconde
   vivant: false,
 };
 
@@ -300,9 +335,10 @@ function compteursVivants(){
 function dessinerCompteurs(){
   if (!etat.reel) return;
   var dt = Date.now() - etat.quand;
-  // Au-dela de trois intervalles sans releve, on cesse de projeter.
-  var fige = dt > INTERVALLE * 3;
-  if (fige) dt = INTERVALLE * 3;
+  // Le serveur publie chaque minute ; au-dela de cinq minutes sans mesure NEUVE, on
+  // cesse de projeter plutot que d afficher un nombre que personne n a mesure.
+  var fige = dt > 300000;
+  if (fige) dt = 300000;
 
   CLES.forEach(function(c){
     var cle = c[0];
@@ -310,8 +346,14 @@ function dessinerCompteurs(){
     if (!el) return;
     var base = etat.reel[cle];
     if (base === null || base === undefined) { el.textContent = '▲'; return; }
-    var v = base + (etat.vitesse[cle] || 0) * dt;
-    el.textContent = nb(Math.max(0, Math.floor(v)));
+    var v = Math.max(0, Math.floor(base + (etat.vitesse[cle] || 0) * dt));
+    var texte = nb(v);
+    if (el.textContent !== texte){
+      el.textContent = texte;
+      el.classList.add('eclat');
+      clearTimeout(el._eclat);
+      el._eclat = setTimeout(function(){ el.classList.remove('eclat'); }, 220);
+    }
   });
 
   var p = document.getElementById('pouls');
@@ -321,7 +363,7 @@ function dessinerCompteurs(){
     txt.textContent = etat.vivant ? 'relevé en retard' : 'moteur silencieux';
   } else {
     p.className = 'direct';
-    txt.textContent = 'en direct, recalé toutes les ' + (INTERVALLE / 1000) + ' secondes';
+    txt.textContent = 'en direct, recalé sur la mesure du serveur chaque minute';
   }
 }
 
@@ -340,31 +382,38 @@ function relever(){
         pages_en_file: m.pages_en_file,
       };
       var maintenant = Date.now();
+      var nouvelleMesure = d.mesure_le !== etat.mesurePrecedente;
 
-      if (etat.reel){
-        var ecoule = maintenant - etat.quand;
-        if (ecoule > 1000){
-          CLES.forEach(function(c){
-            var cle = c[0];
-            var a = etat.reel[cle], b = neuf[cle];
-            if (typeof a === 'number' && typeof b === 'number'){
-              // La vitesse constatee, lissee pour qu un a-coup de releve ne fasse pas
-              // bondir l affichage.
-              var brute = (b - a) / ecoule;
-              var avant = etat.vitesse[cle] || 0;
-              etat.vitesse[cle] = avant ? avant * 0.4 + brute * 0.6 : brute;
-            }
-          });
+      if (nouvelleMesure){
+        if (etat.reel && etat.mesurePrecedente){
+          // Le temps ecoule COTE SERVEUR entre les deux mesures, pas le temps entre nos
+          // deux relevés : c est lui qui a produit l ecart qu on mesure.
+          var ecoule = Date.parse(d.mesure_le) - Date.parse(etat.mesurePrecedente);
+          if (ecoule > 1000 && ecoule < 3600000){
+            CLES.forEach(function(c){
+              var cle = c[0];
+              var a = etat.reel[cle], b = neuf[cle];
+              if (typeof a === 'number' && typeof b === 'number'){
+                var brute = (b - a) / ecoule;
+                var avant = etat.vitesse[cle];
+                // Un lissage leger, pour qu une minute creuse ne fasse pas caler le
+                // compteur et qu une minute chargee ne le fasse pas s emballer.
+                etat.vitesse[cle] = (avant === undefined) ? brute : avant * 0.5 + brute * 0.5;
+              }
+            });
+          }
+        } else if (m.cadence_pages_par_seconde){
+          // Premiere mesure : on ne connait qu une vitesse, celle des pages, publiee
+          // par le serveur. Les autres restent a zero jusqu a la mesure suivante,
+          // plutot que d etre devinees.
+          etat.vitesse.pages_depuis_le_debut = m.cadence_pages_par_seconde / 1000;
         }
-      } else if (m.cadence_pages_par_seconde){
-        // Premier releve : on ne connait qu une vitesse, celle des pages, publiee par
-        // le serveur. Les autres restent a zero jusqu au releve suivant, plutot que
-        // d etre devinees.
-        etat.vitesse.pages_depuis_le_debut = m.cadence_pages_par_seconde / 1000;
+
+        etat.reel = neuf;
+        etat.quand = maintenant;
+        etat.mesurePrecedente = d.mesure_le;
       }
 
-      etat.reel = neuf;
-      etat.quand = maintenant;
       etat.vivant = m.etat === 'MESURE';
 
       document.getElementById('mesure').textContent = etat.vivant
