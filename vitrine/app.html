@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Vigie — l'outil</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+/*
+  L'OUTIL, derriere le compte gratuit.
+  ⛔ TOUT CE QUI S'AFFICHE ICI VIENT DE LA BASE PARTAGEE, JAMAIS D'UN OUTIL TIERS.
+     Le service public ne peut pas redistribuer les donnees d'un abonnement : c'est
+     interdit par les conditions de ces outils, et de toute facon un quota mensuel
+     d'abonnement personnel serait vide par une dizaine d'utilisateurs en une matinee.
+     Ce que Vigie montre ici, Vigie l'a mesure.
+
+  ⛔ DEUX NIVEAUX DE PREUVE, JAMAIS FONDUS EN UN SEUL CHIFFRE.
+     « lu »      : le robot a ouvert la page et lu le lien dans le HTML servi.
+     « annonce » : un index le rapporte, sans page ni rel connus. Le lien peut avoir
+                   ete retire depuis des semaines.
+     Les additionner donnerait a un chiffre d'index l'apparence d'une mesure. C'est
+     exactement le reproche qu'on fait aux outils payants.
+*/
+:root{
+  color-scheme: light;
+  --fond:#f7f7f5; --carte:#ffffff; --carte2:#fbfbf9;
+  --bord:#e4e2dc; --bord-fort:#cfccc4;
+  --texte:#14140f; --texte2:#54524b; --doux:#7b786f;
+  --accent:#eb6834; --bleu:#2a78d6;
+  --ok:#116b40; --ok-fond:#e4f3ea;
+  --attention:#7d6110; --attention-fond:#faf1d8;
+  --grave:#96331a; --grave-fond:#fbe9e3;
+  --neutre:#efeeea;
+  --ombre:0 1px 2px rgba(20,20,15,.05), 0 4px 14px rgba(20,20,15,.045);
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --fond:#131316; --carte:#1b1b1f; --carte2:#202025;
+    --bord:#2f2f36; --bord-fort:#43434c;
+    --texte:#f2f1ee; --texte2:#b9b7b0; --doux:#8d8a83;
+    --accent:#d95926; --bleu:#5b9ef0;
+    --ok:#4cc389; --ok-fond:#13301f;
+    --attention:#d8b755; --attention-fond:#2f2712;
+    --grave:#ea8a6d; --grave-fond:#331a12;
+    --neutre:#26262c;
+    --ombre:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fond);color:var(--texte);
+  font:15px/1.6 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--bleu)}
+code{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--neutre);padding:1px 5px;border-radius:5px}
+
+.grille{display:grid;grid-template-columns:74px 236px 1fr;min-height:100vh}
+
+/* ------------------------------------------------------------- rail d'icones */
+.rail{background:var(--carte);border-right:1px solid var(--bord);display:flex;
+  flex-direction:column;align-items:center;gap:3px;padding:12px 0;position:sticky;top:0;height:100vh}
+.rail .logo{width:38px;height:38px;border-radius:11px;background:var(--accent);
+  display:grid;place-items:center;margin-bottom:14px;flex:none}
+.rail .logo i{width:14px;height:14px;border-radius:50%;background:#fff;position:relative;display:block}
+.rail .logo i:after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--accent)}
+.rail a{width:56px;padding:9px 0 7px;border-radius:10px;text-decoration:none;color:var(--doux);
+  display:flex;flex-direction:column;align-items:center;gap:5px;font-size:10.5px;
+  line-height:1.15;text-align:center;font-weight:560}
+.rail a svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.rail a:hover,.rail a.ici{background:var(--neutre);color:var(--texte)}
+
+/* --------------------------------------------------------------- menu lateral */
+.menu{background:var(--carte);border-right:1px solid var(--bord);padding:18px 0 40px;
+  position:sticky;top:0;height:100vh;overflow-y:auto}
+.menu h2{font-size:16px;margin:0 0 4px;padding:0 18px;font-weight:680;letter-spacing:-.3px}
+.menu .groupe{margin-top:17px}
+.menu .groupe h3{font-size:11px;color:var(--doux);margin:0 0 3px;padding:0 18px;font-weight:600}
+.menu a{display:block;padding:6px 18px;font-size:13.5px;text-decoration:none;color:var(--texte2);
+  border-left:2px solid transparent;cursor:pointer}
+.menu a:hover{background:var(--neutre);color:var(--texte)}
+.menu a.ici{background:var(--neutre);color:var(--texte);font-weight:620;border-left-color:var(--accent)}
+.menu a.off{color:var(--doux);cursor:default}
+.menu a.off:after{content:"·";margin-left:6px;color:var(--bord-fort)}
+
+/* --------------------------------------------------------------- barre du haut */
+.dessus{background:var(--carte);border-bottom:1px solid var(--bord);padding:10px 24px;
+  display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.chercher{display:flex;flex:1;min-width:280px;max-width:620px;border:1px solid var(--bord-fort);
+  border-radius:9px;overflow:hidden;background:var(--carte)}
+.chercher input{flex:1;border:0;padding:9px 13px;font:inherit;font-size:14px;
+  background:transparent;color:var(--texte);outline:none}
+.chercher button{border:0;background:var(--texte);color:var(--fond);font:inherit;font-weight:640;
+  font-size:13.5px;padding:0 18px;cursor:pointer}
+.chercher button:disabled{opacity:.5;cursor:default}
+.moi{margin-left:auto;font-size:13px;color:var(--doux);display:flex;align-items:center;gap:9px}
+.moi b{color:var(--texte2);font-weight:600}
+.lien-nu{background:none;border:0;color:var(--bleu);font:inherit;cursor:pointer;padding:0;
+  text-decoration:underline}
+
+/* -------------------------------------------------------------------- contenu */
+.contenu{padding:20px 24px 60px;max-width:1380px}
+.fil{font-size:12.5px;color:var(--doux);margin:0 0 10px}
+.fil b{color:var(--texte2);font-weight:600}
+h1{font-size:25px;margin:0 0 4px;letter-spacing:-.7px;font-weight:700}
+h1 .sujet{color:var(--doux);font-weight:600}
+.chapeau{color:var(--texte2);font-size:14.5px;max-width:78ch;margin:6px 0 0}
+h2{font-size:18px;margin:34px 0 10px;font-weight:660;letter-spacing:-.3px}
+
+.blocs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px;margin:20px 0}
+.bloc{background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);
+  padding:15px 17px 17px;box-shadow:var(--ombre)}
+.bloc .etiq{display:inline-block;font-size:11.5px;font-weight:660;padding:3px 9px;border-radius:6px;
+  background:var(--neutre);color:var(--texte2);margin:0 0 13px}
+.mesures{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:15px 13px}
+.mesure .nom{font-size:12.5px;color:var(--texte2);margin:0 0 4px;line-height:1.3}
+.mesure .val{font-size:26px;font-weight:700;letter-spacing:-1px;line-height:1.05;color:var(--bleu)}
+.mesure .val.pale{color:var(--doux);font-weight:600}
+.mesure .sous{font-size:11.5px;color:var(--doux);margin-top:3px}
+
+.avert{background:var(--carte2);border:1px solid var(--bord);border-left:3px solid var(--attention);
+  padding:13px 15px;border-radius:10px;margin:18px 0;font-size:13.5px;line-height:1.6;color:var(--texte2)}
+.avert strong{color:var(--texte)}
+.avert.danger{border-left-color:var(--grave);background:var(--grave-fond)}
+.avert.calme{border-left-color:var(--bord-fort)}
+
+.tableau{overflow-x:auto;border:1px solid var(--bord);border-radius:var(--r);background:var(--carte);
+  box-shadow:var(--ombre);margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--bord);vertical-align:top}
+th{background:var(--carte2);font-weight:640;font-size:11.5px;color:var(--texte2);
+  position:sticky;top:0;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.doux{color:var(--doux)}
+.haut{max-height:640px;overflow-y:auto}
+
+.pastille{display:inline-block;font-size:11px;font-weight:640;padding:2px 8px;border-radius:6px;
+  white-space:nowrap}
+.pastille.lu{background:var(--ok-fond);color:var(--ok)}
+.pastille.annonce{background:var(--neutre);color:var(--doux)}
+.pastille.suivi{background:var(--ok-fond);color:var(--ok)}
+.pastille.nonsuivi{background:var(--neutre);color:var(--doux)}
+
+.jauge{background:var(--neutre);border-radius:4px;height:9px;min-width:80px;overflow:hidden}
+.jauge i{display:block;height:100%;background:var(--bleu);border-radius:4px}
+.jauge.mauvais i{background:var(--grave)}
+
+.attente{color:var(--doux);font-size:14px;padding:22px 0}
+.erreur{background:var(--grave-fond);color:var(--grave);border-radius:10px;padding:13px 15px;
+  font-size:13.5px;margin:16px 0}
+
+/* --------------------------------------------------------------- portillon */
+.portillon{max-width:430px;margin:70px auto;background:var(--carte);border:1px solid var(--bord);
+  border-radius:var(--r);padding:26px;box-shadow:var(--ombre)}
+.portillon h2{margin:0 0 6px;font-size:20px}
+.portillon p{color:var(--texte2);font-size:14px}
+.portillon input{width:100%;padding:10px 12px;margin:7px 0;border:1px solid var(--bord-fort);
+  border-radius:9px;font:inherit;background:var(--fond);color:var(--texte)}
+.portillon button.bouton{width:100%;padding:11px;border:0;border-radius:9px;background:var(--accent);
+  color:#fff;font:inherit;font-weight:660;cursor:pointer;margin-top:6px}
+.etat{font-size:13px;color:var(--doux);min-height:20px;margin-top:8px}
+
+@media (max-width:1040px){ .grille{grid-template-columns:64px 1fr} .menu{display:none} }
+</style>
+</head>
+<body>
+<div class="grille">
+
+<nav class="rail">
+  <div class="logo"><i></i></div>
+  <a href="#/apercu" data-rail="seo" class="ici"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 0v18M3 12h18"/></svg>SEO</a>
+  <a href="#/liens" data-rail="liens"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg>Liens</a>
+  <a href="#/robot" data-rail="robot"><svg viewBox="0 0 24 24"><path d="M12 2v4M5 8h14v11H5zM9 13h.01M15 13h.01"/></svg>Robot</a>
+  <a href="/" data-rail="site"><svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Le site</a>
+</nav>
+
+<aside class="menu">
+  <h2>SEO</h2>
+  <div class="groupe">
+    <h3>Analyse concurrentielle</h3>
+    <a data-vue="apercu">Aperçu du domaine</a>
+  </div>
+  <div class="groupe">
+    <h3>Netlinking</h3>
+    <a data-vue="liens">Tous les backlinks</a>
+    <a data-vue="referents">Domaines référents</a>
+    <a data-vue="audit">Audit des liens</a>
+    <a data-vue="reclamer">Liens à réclamer</a>
+  </div>
+  <div class="groupe">
+    <h3>Le robot</h3>
+    <a data-vue="robot">État du crawl</a>
+  </div>
+  <div class="groupe">
+    <h3>Pas encore mesuré</h3>
+    <a class="off" title="il faut une base de volumes de recherche, qui ne se mesure pas">Mots-clés</a>
+    <a class="off" title="Search Console ne couvre que les domaines qu'on possède ; brancher le vôtre est le prochain chantier">Positions</a>
+  </div>
+</aside>
+
+<main>
+  <div class="dessus">
+    <form class="chercher" id="f">
+      <input id="q" type="text" placeholder="Un domaine, par exemple exemple.com" autocomplete="off">
+      <button id="go" type="submit">Analyser</button>
+    </form>
+    <span class="moi" id="moi"></span>
+  </div>
+  <div class="contenu" id="out"></div>
+</main>
+
+</div>
+
+<script>
+"use strict";
+
+var moi = null, D = null, BL = null, cible = "", vue = "apercu", enCours = false;
+var out = document.getElementById('out');
+var champ = document.getElementById('q');
+var go = document.getElementById('go');
+
+function ech(s){ return String(s === null || s === undefined ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function nb(n){ return (n === null || n === undefined) ? '—' : Number(n).toLocaleString('fr-FR'); }
+function jour(s){ return s ? String(s).slice(0,10).split('-').reverse().join('/') : ''; }
+function court(u, n){ n = n || 48; var s = String(u||'').replace(/^https?:\/\//,'').replace(/^www\./,'');
+  return s.length > n ? s.slice(0, n-1) + '…' : s; }
+
+async function api(chemin, options){
+  var r, d;
+  try { r = await fetch(chemin, Object.assign({ credentials:'same-origin' }, options||{})); }
+  catch(e){ return { ok:false, statut:0, d:{ erreur:'réseau injoignable' } }; }
+  try { d = await r.json(); } catch(e){ d = {}; }
+  return { ok: r.ok, statut: r.status, d: d };
+}
+
+/* ⛔ L'etirement du mot de passe se fait dans le navigateur : le palier gratuit de
+   Cloudflare accorde dix millisecondes de processeur par requete, un PBKDF2 serieux en
+   coute cent. Le serveur ne voit jamais le mot de passe, seulement cette derivee. */
+async function deriver(email, mdp){
+  var enc = new TextEncoder();
+  var cle = await crypto.subtle.importKey('raw', enc.encode(mdp), 'PBKDF2', false, ['deriveBits']);
+  var bits = await crypto.subtle.deriveBits(
+    { name:'PBKDF2', salt: enc.encode('vigie|' + email), iterations:210000, hash:'SHA-256' }, cle, 256);
+  return Array.prototype.map.call(new Uint8Array(bits), function(o){
+    return o.toString(16).padStart(2,'0'); }).join('');
+}
+
+/* ------------------------------------------------------------------- compte */
+
+async function relireCompte(){
+  var r = await api('/api/compte');
+  moi = (r.d && r.d.connecte) ? r.d : null;
+  var b = document.getElementById('moi');
+  if (!moi){ b.innerHTML = '<a href="/">se connecter</a>'; return; }
+  b.innerHTML = '<b>' + ech(moi.email) + '</b>' +
+    (moi.admin ? ' <a href="/admin.html">tableau</a>' : '') +
+    ' <button class="lien-nu" id="sortir">sortir</button>';
+  document.getElementById('sortir').onclick = async function(){
+    await api('/api/compte', { method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ action:'deconnexion' }) });
+    moi = null; D = null; BL = null; relireCompte(); dessiner();
+  };
+}
+
+function portillon(){
+  return '<div class="portillon">' +
+    '<h2>Un compte gratuit, et c\'est tout</h2>' +
+    '<p>Il sert à empêcher qu\'un robot sature l\'outil, et à savoir combien de personnes s\'en ' +
+    'servent. Rien n\'est revendu. <a href="/a-propos">pourquoi c\'est gratuit</a></p>' +
+    '<input id="c-mail" type="email" placeholder="Votre adresse email" autocomplete="username">' +
+    '<input id="c-mdp" type="password" placeholder="Mot de passe, 8 caractères minimum" autocomplete="current-password">' +
+    '<button class="bouton" id="c-go">Se connecter ou créer le compte</button>' +
+    '<div class="etat" id="c-etat"></div></div>';
+}
+
+function brancherPortillon(){
+  var b = document.getElementById('c-go');
+  if (!b) return;
+  b.onclick = async function(){
+    var e = (document.getElementById('c-mail').value||'').trim().toLowerCase();
+    var p = document.getElementById('c-mdp').value || '';
+    var etat = document.getElementById('c-etat');
+    if (e.indexOf('@') < 1 || e.indexOf('.') < 0){ etat.textContent = 'Adresse incomplète.'; return; }
+    if (p.length < 8){ etat.textContent = 'Huit caractères minimum.'; return; }
+    b.disabled = true; etat.textContent = 'préparation du mot de passe…';
+    var derivee = await deriver(e, p);
+    etat.textContent = 'envoi…';
+    var r = await api('/api/compte', { method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ action:'connexion', email:e, derivee:derivee }) });
+    if (!r.ok){
+      // Pas de compte : on le cree, plutot que d'obliger a cliquer un second bouton.
+      r = await api('/api/compte', { method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({ action:'inscription', email:e, derivee:derivee }) });
+    }
+    b.disabled = false;
+    if (!r.ok){ etat.textContent = (r.d && r.d.erreur) || 'échec'; return; }
+    etat.textContent = '';
+    await relireCompte();
+    if (cible) lancer(cible); else dessiner();
+  };
+}
+
+/* ------------------------------------------------------------------ analyse */
+
+async function lancer(dom){
+  cible = String(dom||'').trim().toLowerCase()
+    .replace(/^https?:\/\//,'').replace(/^www\./,'').replace(/\/.*$/,'');
+  if (!cible) return;
+  champ.value = cible;
+  if (!moi){ dessiner(); return; }
+  enCours = true; go.disabled = true; dessiner();
+  var a = await api('/api/analyser?domaine=' + encodeURIComponent(cible));
+  if (a.statut === 401){ moi = null; relireCompte(); enCours = false; go.disabled = false; dessiner(); return; }
+  D = a.ok ? a.d : { erreur: (a.d && a.d.erreur) || 'refusé' };
+  var b = await api('/api/backlinks?d=' + encodeURIComponent(cible));
+  BL = b.ok ? b.d : null;
+  enCours = false; go.disabled = false;
+  location.hash = '#/' + vue + '/' + cible;
+  dessiner();
+}
+
+async function lancerRobot(){
+  if (!cible || !moi) return;
+  var z = document.getElementById('robot-etat');
+  if (z) z.textContent = 'le robot part…';
+  var r = await api('/api/backlinks', { method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ domaine: cible }) });
+  if (!r.ok){ if (z) z.textContent = (r.d && r.d.erreur) || 'refusé'; return; }
+  var b = await api('/api/backlinks?d=' + encodeURIComponent(cible));
+  BL = b.ok ? b.d : BL;
+  dessiner();
+}
+
+/* ------------------------------------------------------------------- vues */
+
+function enTete(titre, chapeau){
+  return '<p class="fil">Vigie <span class="doux">›</span> SEO <span class="doux">›</span> <b>' +
+    ech(titre) + '</b></p>' +
+    '<h1>' + ech(titre) + (cible ? ' <span class="sujet">' + ech(cible) + '</span>' : '') + '</h1>' +
+    (chapeau ? '<p class="chapeau">' + chapeau + '</p>' : '');
+}
+
+function compteurs(){
+  var c = (BL && BL.comptes) || {};
+  var rel = {}; ((BL && BL.repartition_rel) || []).forEach(function(r){ rel[r.rel] = r.n; });
+  var suivis = rel['dofollow'] || 0;
+  var total = Object.keys(rel).reduce(function(s,k){ return s + rel[k]; }, 0);
+  return '<div class="blocs"><div class="bloc"><span class="etiq">Liens</span><div class="mesures">' +
+    m('Domaines distincts', c.domaines_distincts, 'lus et annoncés, dédoublonnés') +
+    m('Domaines lus', c.domaines_lus, 'page ouverte, HTML lu') +
+    m('Annoncés', c.annonces, 'par un index, non vérifiés') +
+    m('Liens lus', total, nb(suivis) + ' en dofollow') +
+    '</div></div>' + blocSante() + '</div>';
+}
+
+function m(nom, val, sous){
+  var pale = (val === null || val === undefined) ? ' pale' : '';
+  return '<div class="mesure"><div class="nom">' + ech(nom) + '</div>' +
+    '<div class="val' + pale + '">' + (pale ? '—' : nb(val)) + '</div>' +
+    (sous ? '<div class="sous">' + sous + '</div>' : '') + '</div>';
+}
+
+function blocSante(){
+  if (!D || D.erreur) return '';
+  var s = D.sante || D.technique || {};
+  var pop = D.popularite || {};
+  return '<div class="bloc"><span class="etiq">Le site</span><div class="mesures">' +
+    m('Pages au sitemap', s.urls_sitemap !== undefined ? s.urls_sitemap : (D.sitemap && D.sitemap.urls),
+      'déclarées par le site') +
+    m('Rang de popularité', pop.tranco || pop.rang || null, 'panel public, 1 M de domaines') +
+    '</div></div>';
+}
+
+function vueApercu(){
+  var h = enTete('Aperçu du domaine',
+    'Ce que Vigie a mesuré sur ce domaine. Chaque nombre dit d\'où il vient : un lien lu dans ' +
+    'le HTML servi et un lien annoncé par un index n\'ont pas la même valeur de preuve.');
+  if (!BL) return h + '<p class="attente">Aucune analyse. Tapez un domaine en haut.</p>';
+  h += compteurs();
+
+  var r = (BL.robot) || {};
+  h += '<div class="avert calme"><strong>Ce que ce tableau n\'est pas.</strong> ' +
+    ech(BL.nature || '') + ' Le robot continue en arrière-plan, sans que vous laissiez la page ouverte. ' +
+    '<a href="#/robot/' + ech(cible) + '">voir son état</a></div>';
+
+  var dom = BL.domaines || [];
+  if (dom.length){
+    h += '<h2>Les domaines qui pointent le plus</h2>' + tableauDomaines(dom.slice(0, 25));
+  }
+  return h;
+}
+
+function tableauDomaines(l){
+  return '<div class="tableau haut"><table><thead><tr>' +
+    '<th>Domaine</th><th class="num">Liens</th><th class="num">Dofollow</th>' +
+    '<th>Page qui cite</th><th>Ancre</th><th>Depuis</th></tr></thead><tbody>' +
+    l.map(function(d){
+      return '<tr><td>' + ech(d.domaine_src) + '</td>' +
+        '<td class="num">' + nb(d.liens) + '</td>' +
+        '<td class="num">' + nb(d.suivis) + '</td>' +
+        '<td>' + (d.exemple_url
+          ? '<a href="' + ech(d.exemple_url) + '" target="_blank" rel="noopener nofollow">' +
+            ech(court(d.exemple_url, 42)) + '</a>'
+          : '<span class="doux">non lue</span>') + '</td>' +
+        '<td>' + (d.exemple_ancre ? ech(String(d.exemple_ancre).slice(0,40)) : '<span class="doux">—</span>') + '</td>' +
+        '<td class="doux">' + jour(d.depuis) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function vueLiens(){
+  var h = enTete('Tous les backlinks',
+    'Chaque lien avec la page qui le porte, son ancre, sa destination et son attribut. ' +
+    'Ce tableau ne contient que des liens <strong>lus dans le HTML servi</strong> : ' +
+    'ce que le robot n\'a pas encore ouvert est dans « Domaines référents ».');
+  if (!BL) return h + '<p class="attente">Aucune analyse.</p>';
+  var l = BL.liens || [];
+  if (!l.length){
+    return h + '<div class="avert"><strong>Aucun lien lu pour l\'instant.</strong> ' +
+      'Ce n\'est pas « zéro backlink » : c\'est que le robot n\'a pas encore ouvert de page qui en porte. ' +
+      nb((BL.referents_annonces||[]).length) + ' domaine(s) sont annoncés par un index et attendent d\'être vérifiés. ' +
+      '<a href="#/robot/' + ech(cible) + '">lancer le robot</a></div>';
+  }
+  h += '<div class="tableau haut"><table><thead><tr>' +
+    '<th>Page source</th><th>Ancre</th><th>Destination</th><th>Attribut</th><th>Vu</th><th>Lu le</th>' +
+    '</tr></thead><tbody>' +
+    l.map(function(b){
+      var suivi = b.rel === 'dofollow';
+      return '<tr><td><a href="' + ech(b.url_src) + '" target="_blank" rel="noopener nofollow">' +
+        ech(court(b.url_src, 46)) + '</a></td>' +
+        '<td>' + (b.ancre ? ech(String(b.ancre).slice(0,52)) : '<span class="doux">(vide)</span>') + '</td>' +
+        '<td class="doux">' + ech(court(b.url_dest, 34)) + '</td>' +
+        '<td><span class="pastille ' + (suivi ? 'suivi">dofollow' : 'nonsuivi">' + ech(b.rel||'nofollow')) + '</span></td>' +
+        '<td><span class="pastille lu" title="page ouverte, lien lu dans le HTML servi">lu</span></td>' +
+        '<td class="doux">' + jour(b.vu_le) + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="doux">' + nb(BL.total_affichable) + ' lien(s) lu(s) au total.</p>';
+  return h;
+}
+
+function vueReferents(){
+  var h = enTete('Domaines référents',
+    'Les domaines qui pointent vers ce site. Ceux que le robot a <strong>ouverts et lus</strong> ' +
+    'et ceux qu\'un index <strong>annonce</strong> sont séparés : le second peut avoir été retiré ' +
+    'depuis des semaines, on ne le sait pas encore.');
+  if (!BL) return h + '<p class="attente">Aucune analyse.</p>';
+
+  var lus = BL.domaines || [];
+  var lusSet = {}; lus.forEach(function(d){ lusSet[d.domaine_src] = true; });
+  var annonces = (BL.referents_annonces || []).filter(function(a){ return !lusSet[a.domaine_src]; });
+
+  h += compteurs();
+  h += '<h2>Vérifiés par le robot <span class="doux">' + nb(lus.length) + '</span></h2>';
+  h += lus.length ? tableauDomaines(lus)
+    : '<div class="avert">Aucun domaine encore ouvert. <a href="#/robot/' + ech(cible) + '">lancer le robot</a></div>';
+
+  h += '<h2>Annoncés par un index <span class="doux">' + nb(annonces.length) + '</span></h2>' +
+    '<div class="avert"><strong>' + ech(BL.referents_annonces_nature || '') + '</strong></div>';
+  if (annonces.length){
+    h += '<div class="tableau haut"><table><thead><tr><th>Domaine</th><th class="num">Liens annoncés</th>' +
+      '<th>Source</th><th>Vu le</th></tr></thead><tbody>' +
+      annonces.map(function(a){
+        return '<tr><td>' + ech(a.domaine_src) + '</td><td class="num">' + nb(a.liens) + '</td>' +
+          '<td class="doux">' + ech(a.source||'') + '</td><td class="doux">' + jour(a.vu_le) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  return h;
+}
+
+/* ⛔ L'audit classe sur des FAITS verifiables a la main, jamais sur une impression, et il
+   en exige DEUX. Un seul signal ne prouve rien : un petit site neuf a une extension bon
+   marche sans etre une ferme a liens. */
+var TLD_DEPOT = /\.(shop|top|icu|xyz|site|website|space|party|click|link|fyi|buzz|cyou)$/i;
+var NOM_VENDEUR = /(pbn|backlink|seo-|-seo|linkbuilding|ranking|dofollow|guestpost|linkbuy)/i;
+
+function vueAudit(){
+  var h = enTete('Audit des liens',
+    'Ce qui ressemble à du lien acheté ou automatique, avec le motif à chaque ligne. ' +
+    'Cette page classe, elle ne désavoue rien : un désaveu se décide.');
+  if (!BL) return h + '<p class="attente">Aucune analyse.</p>';
+
+  var tous = {};
+  (BL.domaines || []).forEach(function(d){ tous[d.domaine_src] = (tous[d.domaine_src]||0) + d.liens; });
+  (BL.referents_annonces || []).forEach(function(a){ if (!tous[a.domaine_src]) tous[a.domaine_src] = a.liens || 1; });
+  var noms = Object.keys(tous);
+  if (!noms.length) return h + '<div class="avert">Aucun domaine référent connu pour l\'instant.</div>';
+
+  var suspects = [];
+  noms.forEach(function(n){
+    var motifs = [];
+    if (TLD_DEPOT.test(n)) motifs.push('extension de dépôt');
+    if (NOM_VENDEUR.test(n)) motifs.push('nom qui vend du lien');
+    if ((n.match(/-/g)||[]).length >= 3) motifs.push('nom sur-tiretté');
+    if (/\d{3,}/.test(n)) motifs.push('chiffres en série');
+    if (motifs.length >= 2) suspects.push({ n:n, liens:tous[n], motifs:motifs });
+  });
+  suspects.sort(function(a,b){ return b.motifs.length - a.motifs.length || b.liens - a.liens; });
+
+  var zones = {};
+  noms.forEach(function(n){ var p = n.split('.').pop(); zones[p] = (zones[p]||0) + 1; });
+  var zl = Object.keys(zones).map(function(z){ return { z:z, n:zones[z] }; })
+    .sort(function(a,b){ return b.n - a.n; });
+
+  h += '<div class="blocs"><div class="bloc"><span class="etiq">État du profil</span><div class="mesures">' +
+    '<div class="mesure"><div class="nom">Domaines suspects</div><div class="val" style="color:var(--grave)">' +
+      nb(suspects.length) + '</div><div class="sous">au moins deux signaux</div></div>' +
+    '<div class="mesure"><div class="nom">Sans aucun signal</div><div class="val" style="color:var(--ok)">' +
+      nb(noms.length - suspects.length) + '</div><div class="sous">sur ' + nb(noms.length) + ' examinés</div></div>' +
+    '<div class="mesure"><div class="nom">Part suspecte</div><div class="val">' +
+      Math.round(suspects.length / noms.length * 100) + ' %</div><div class="sous">du profil</div></div>' +
+    '</div></div></div>';
+
+  h += '<div class="avert"><strong>Comment un domaine arrive dans cette liste.</strong> ' +
+    'Quatre signaux, tous vérifiables à la main : une extension de dépôt, un nom qui annonce ' +
+    'la vente de liens, un nom sur-tiretté, des chiffres en série. Il en faut <strong>deux</strong>. ' +
+    '⛔ Cette page ne dit pas qu\'un lien est mauvais, elle dit qu\'il mérite un coup d\'œil.</div>';
+
+  h += '<h2>Domaines à regarder</h2>';
+  h += suspects.length
+    ? '<div class="tableau haut"><table><thead><tr><th>Domaine</th><th class="num">Liens</th>' +
+      '<th>Motifs retenus</th></tr></thead><tbody>' +
+      suspects.map(function(s){
+        return '<tr><td>' + ech(s.n) + '</td><td class="num">' + nb(s.liens) + '</td>' +
+          '<td class="doux">' + ech(s.motifs.join(' · ')) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : '<div class="avert calme">Aucun domaine ne réunit deux signaux. C\'est bon signe, et ce n\'est pas une garantie : ' +
+      'les signaux portent sur le NOM et l\'extension, pas sur le contenu de la page.</div>';
+
+  h += '<h2>Extensions de domaine</h2><div class="tableau"><table><thead><tr>' +
+    '<th>Zone</th><th class="num">Domaines</th><th>Part</th></tr></thead><tbody>' +
+    zl.map(function(x){
+      var part = x.n / noms.length;
+      return '<tr><td><code>.' + ech(x.z) + '</code></td><td class="num">' + nb(x.n) + '</td>' +
+        '<td><div class="jauge' + (TLD_DEPOT.test('.'+x.z) && part > .15 ? ' mauvais' : '') +
+        '"><i style="width:' + (part*100).toFixed(1) + '%"></i></div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+  return h;
+}
+
+function vueReclamer(){
+  var h = enTete('Liens à réclamer',
+    'Des pages qui <strong>citent le domaine sans lien cliquable</strong>, et des sites que ce ' +
+    'domaine cite lui-même sans retour. Ce ne sont pas des backlinks acquis : ce sont les plus ' +
+    'faciles à obtenir, parce que la personne vous connaît déjà.');
+  if (!BL) return h + '<p class="attente">Aucune analyse.</p>';
+  var men = BL.mentions || [], rec = BL.reciprocite || [], murs = BL.murs || [];
+
+  h += '<h2>Cité sans lien <span class="doux">' + nb(men.length) + '</span></h2>';
+  h += men.length ? liste(men) : '<div class="avert calme">Aucune mention sans lien relevée.</div>';
+
+  h += '<h2>Vous les citez, ils ne vous citent pas <span class="doux">' + nb(rec.length) + '</span></h2>';
+  h += rec.length ? liste(rec) : '<div class="avert calme">Rien à signaler.</div>';
+
+  if (murs.length){
+    h += '<h2>Pages qu\'on n\'a pas pu ouvrir <span class="doux">' + nb(murs.length) + '</span></h2>' +
+      '<div class="avert"><strong>Un mur n\'est pas une absence de lien.</strong> ' +
+      '403, captcha ou délai : la page existe peut-être et porte peut-être un lien. ' +
+      'Elle sort ici plutôt que d\'être comptée zéro.</div>' + liste(murs);
+  }
+  return h;
+}
+
+function liste(l){
+  return '<div class="tableau haut"><table><thead><tr><th>Page</th><th>Origine</th></tr></thead><tbody>' +
+    l.map(function(x){
+      return '<tr><td><a href="' + ech(x.url) + '" target="_blank" rel="noopener nofollow">' +
+        ech(court(x.url, 62)) + '</a></td><td class="doux">' + ech(x.origine||'') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function vueRobot(){
+  var h = enTete('État du crawl',
+    'Le robot ouvre de vraies pages chez de vraies personnes. Il est plafonné à 12 lancements ' +
+    'par compte et par 24 h, et il continue en arrière-plan une fois la page fermée.');
+  if (!cible) return h + '<p class="attente">Tapez un domaine en haut.</p>';
+  var r = (BL && BL.robot) || {};
+  h += '<div class="blocs"><div class="bloc"><span class="etiq">Ce tour</span><div class="mesures">' +
+    m('Pages lues', r.pages_lues, 'ouvertes et analysées') +
+    m('Liens trouvés', r.liens_trouves, 'dans le HTML servi') +
+    '</div>' +
+    '<div class="sous" style="margin-top:12px">' + ech(r.phase_msg || r.etat || 'jamais lancé') + '</div>' +
+    '</div></div>' +
+    '<p><button class="bouton" id="robot-go" style="padding:10px 18px;border:0;border-radius:9px;' +
+    'background:var(--accent);color:#fff;font:inherit;font-weight:640;cursor:pointer">' +
+    'Lancer le robot sur ' + ech(cible) + '</button></p>' +
+    '<div class="etat" id="robot-etat"></div>' +
+    '<div class="avert"><strong>Ce que fait un lancement.</strong> Vigie cherche des pages ' +
+    'candidates, les ouvre, et lit le lien dans le HTML servi. Chaque domaine confirmé passe ' +
+    'du tableau « annoncés » au tableau des liens lus. ⛔ Ce que le robot ne trouve pas ' +
+    'n\'est pas compté zéro : ça reste « non vérifié ».</div>';
+  return h;
+}
+
+/* ------------------------------------------------------------------ rendu */
+
+var VUES = { apercu:vueApercu, liens:vueLiens, referents:vueReferents,
+             audit:vueAudit, reclamer:vueReclamer, robot:vueRobot };
+
+function dessiner(){
+  document.querySelectorAll('.menu a[data-vue]').forEach(function(a){
+    a.className = (a.dataset.vue === vue ? 'ici' : ''); });
+
+  if (!moi){ out.innerHTML = portillon(); brancherPortillon(); return; }
+  if (enCours){ out.innerHTML = '<p class="attente">Mesure en cours… on interroge le site, ' +
+    'son robots.txt, son sitemap, la base partagée et un panel de popularité.</p>'; return; }
+  if (D && D.erreur){ out.innerHTML = '<div class="erreur">' + ech(D.erreur) + '</div>'; return; }
+  if (!cible){
+    out.innerHTML = enTete('L\'outil', 'Tapez un domaine dans la barre du haut. Vigie mesure ce ' +
+      'qu\'il peut mesurer et dit ce qu\'il ne sait pas.') +
+      '<div class="avert calme">Ce que vous analysez enrichit la base partagée : le domaine que ' +
+      'vous faites découvrir profite à la personne suivante qui le cherchera. C\'est ce qui ' +
+      'permet à un outil gratuit de finir par voir des choses qu\'un abonnement ne voit pas.</div>';
+    return;
+  }
+  out.innerHTML = (VUES[vue] || vueApercu)();
+  var rg = document.getElementById('robot-go');
+  if (rg) rg.onclick = lancerRobot;
+}
+
+function route(){
+  var p = (location.hash || '').replace(/^#\/?/, '').split('/');
+  if (p[0] && VUES[p[0]]) vue = p[0];
+  var d = p[1] ? decodeURIComponent(p[1]) : '';
+  document.querySelectorAll('.rail a[data-rail]').forEach(function(a){
+    a.className = ((a.dataset.rail === 'liens' && ['liens','referents','audit','reclamer'].indexOf(vue) >= 0)
+      || (a.dataset.rail === 'robot' && vue === 'robot')
+      || (a.dataset.rail === 'seo' && vue === 'apercu')) ? 'ici' : ''; });
+  if (d && d !== cible){ lancer(d); return; }
+  dessiner();
+}
+
+document.querySelectorAll('.menu a[data-vue]').forEach(function(a){
+  a.onclick = function(){ vue = a.dataset.vue; location.hash = '#/' + vue + (cible ? '/' + cible : ''); };
+});
+document.getElementById('f').addEventListener('submit', function(e){
+  e.preventDefault(); lancer(champ.value);
+});
+window.addEventListener('hashchange', route);
+
+(async function(){ await relireCompte(); route(); })();
+</script>
+</body>
+</html>
