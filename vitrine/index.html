@@ -591,7 +591,7 @@ function panneauSources(robot){
     if (s.etat === 'MESURE'){
       return '<li class="' + (s.trouves > 0 ? 'rend' : '') + '">' + ech(s.source) + ' · ' +
         nb(s.trouves || 0) +
-        (s.detail ? ' <span style="opacity:.75">' + ech(s.detail) + '</span>' : '') + '</li>';
+        (s.detail ? ' · <span style="opacity:.75">' + ech(s.detail) + '</span>' : '') + '</li>';
     }
     if (s.etat === 'ANGLE_MORT')
       return '<li class="mur">\u25B2 ' + ech(s.source) + ' · ' + ech(s.pourquoi || 'muette') + '</li>';
