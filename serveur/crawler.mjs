@@ -46,8 +46,9 @@ const PROFONDEUR_MAX = Number(arg("profondeur", 3));
 const PAGES_MAX = Number(arg("pages", 0));        // 0 = sans fin
 const OCTETS_MAX = 1_200_000;
 
+const INSTANCE = arg("instance", "1");
 const horodate = () => new Date().toISOString().replace("T", " ").slice(0, 19);
-const dire = (m) => console.log(`[${horodate()}] ${m}`);
+const dire = (m) => console.log(`[${horodate()}] [r${INSTANCE}] ${m}`);
 
 // ⛔ UN FILET, ET IL EST NECESSAIRE. Une exception levee depuis un evenement de socket
 //    par une bibliotheque tierce ne traverse aucun try/catch de la boucle. Sans ce
@@ -76,6 +77,11 @@ bd.exec("PRAGMA synchronous = NORMAL");
 bd.exec("PRAGMA temp_store = MEMORY");
 bd.exec("PRAGMA cache_size = -200000");
 
+// ⛔ SANS busy_timeout, DEUX ROBOTS SUR LA MEME BASE SE JETTENT DES « database is
+//    locked » A LA FIGURE. En WAL un seul ecrit a la fois ; le second doit attendre son
+//    tour, pas abandonner. Trente secondes couvrent largement une ecriture de page.
+bd.exec("PRAGMA busy_timeout = 30000");
+
 bd.exec(`
 -- ⛔ « priorite » N EST PAS UN CONFORT, C EST CE QUI REND LE ROBOT UTILE.
 --    Sans elle, la file melange les 36 891 domaines referents d un geant du secteur et
@@ -95,14 +101,22 @@ CREATE TABLE IF NOT EXISTS file (
 CREATE INDEX IF NOT EXISTS idx_file_travail ON file(etat, priorite, profondeur);
 CREATE INDEX IF NOT EXISTS idx_file_hote ON file(hote, etat);
 
+-- ⛔ « occupe_jusqu_a » EST CE QUI PERMET DE FAIRE TOURNER PLUSIEURS ROBOTS.
+--    La politesse dit : une seule requete en vol par hote. Tant qu il n y avait qu un
+--    processus, un simple ensemble en memoire suffisait. Des qu il y en a deux, chacun
+--    a son propre ensemble et ils ne se voient pas : ils tombent tous les deux sur le
+--    meme site et le martelent. C est exactement ce qui fait bannir une adresse IP.
+--    Le verrou vit donc dans la BASE, partagee, et il porte une date d expiration pour
+--    qu un robot tue en pleine page ne bloque pas son hote pour toujours.
 CREATE TABLE IF NOT EXISTS hotes (
-  hote        TEXT PRIMARY KEY,
-  interdit    TEXT,
-  delai       REAL NOT NULL DEFAULT 0,
-  mur         INTEGER NOT NULL DEFAULT 0,
-  robots_le   TEXT,
-  pages_lues  INTEGER NOT NULL DEFAULT 0,
-  dernier_le  TEXT
+  hote           TEXT PRIMARY KEY,
+  interdit       TEXT,
+  delai          REAL NOT NULL DEFAULT 0,
+  mur            INTEGER NOT NULL DEFAULT 0,
+  robots_le      TEXT,
+  pages_lues     INTEGER NOT NULL DEFAULT 0,
+  dernier_le     TEXT,
+  occupe_jusqu_a TEXT
 );
 
 -- L'INDEX DE LIENS. C'est le produit du robot, et il est valable pour TOUS les
@@ -125,6 +139,15 @@ CREATE INDEX IF NOT EXISTS idx_liens_src ON liens(domaine_src);
 // La colonne peut manquer sur une base creee avant cette version : on l ajoute sans
 // rien casser, et on ignore l erreur si elle est deja la.
 try { bd.exec("ALTER TABLE file ADD COLUMN priorite INTEGER NOT NULL DEFAULT 3"); } catch { /* deja presente */ }
+try { bd.exec("ALTER TABLE hotes ADD COLUMN occupe_jusqu_a TEXT"); } catch { /* deja presente */ }
+
+// ⛔ UNE PAGE LAISSEE « en cours » PAR UN ROBOT TUE BLOQUERAIT LA FILE POUR TOUJOURS.
+//    Au demarrage, on rend a la file tout ce qui traine depuis plus de dix minutes :
+//    aucune page ne prend dix minutes, donc c est forcement un robot qui n est plus la.
+const rendues = bd.prepare(
+  "UPDATE file SET etat = 'attente' WHERE etat = 'encours' AND (lu_le IS NULL OR lu_le < ?)"
+).run(new Date(Date.now() - 600000).toISOString());
+if (rendues.changes) console.log(`[reprise] ${rendues.changes} page(s) rendue(s) a la file`);
 try { bd.exec("CREATE INDEX IF NOT EXISTS idx_file_travail2 ON file(etat, priorite, profondeur)"); } catch { /* deja presente */ }
 
 /* -------------------------------------------------------------- utilitaires */
@@ -286,7 +309,6 @@ function enfiler(url, profondeur, priorite = 3) {
 
 let pagesLues = 0;
 let liensNotes = 0;
-const occupes = new Set();
 
 /**
  * Ouvre une page, avec plafond d octets et de temps.
@@ -395,38 +417,73 @@ async function traiter(ligne) {
 }
 
 /**
- * Prend la prochaine page a lire, sur un hote qui n'est PAS deja en cours.
- * ⛔ UNE SEULE REQUETE EN VOL PAR HOTE. Sans ce verrou, vingt-quatre lecteurs tombent
- *    tous sur le meme gros site et le martelent : c'est ce qui fait bannir une adresse.
+ * Prend la prochaine page a lire, et POSE LE VERROU DANS LA BASE.
+ *
+ * ⛔ LA PRISE DOIT ETRE ATOMIQUE, sinon deux robots choisissent la meme page a la
+ *    milliseconde pres et la lisent tous les deux. BEGIN IMMEDIATE prend le verrou
+ *    d ecriture avant de lire : la selection et la reservation ne peuvent pas etre
+ *    coupees en deux.
  */
-function prochaine() {
-  const exclus = [...occupes];
-  const trous = exclus.map(() => "?").join(",");
-  const sql =
-    "SELECT url, hote, profondeur, priorite FROM file WHERE etat = 'attente'" +
-    (exclus.length ? ` AND hote NOT IN (${trous})` : "") +
-    " ORDER BY priorite ASC, profondeur ASC, rowid ASC LIMIT 1";
-  return bd.prepare(sql).get(...exclus);
-}
+// ⛔ CHAQUE ROBOT NE PIOCHE QUE DANS SA BANDE DE PRIORITE.
+//    Un seul robot qui prend tout finit par partir sur le large des que la niche est a
+//    jour, puis met des heures a revenir sur la niche quand une page y bouge. Deux
+//    robots, deux bandes : celui de la niche ne fait QUE la niche et repasse dessus
+//    sans arret, celui du large elargit la couverture pour tous les autres domaines
+//    que quelqu un demandera un jour.
+//    Les bornes sont ramenees a des entiers valides avant d entrer dans la requete :
+//    elles y sont concatenees, jamais liees, parce qu une clause BETWEEN liee empeche
+//    SQLite d utiliser l index de la file.
+const PRIO_MIN = Math.max(1, Math.min(9, Number(arg("pmin", 1)) || 1));
+const PRIO_MAX = Math.max(PRIO_MIN, Math.min(9, Number(arg("pmax", 9)) || 9));
 
+const choisir = bd.prepare(
+  "SELECT f.url, f.hote, f.profondeur, f.priorite FROM file f " +
+  "WHERE f.etat = 'attente' AND f.priorite BETWEEN " + PRIO_MIN + " AND " + PRIO_MAX + " AND NOT EXISTS (" +
+  "  SELECT 1 FROM hotes h WHERE h.hote = f.hote AND h.occupe_jusqu_a > ?" +
+  ") ORDER BY f.priorite ASC, f.profondeur ASC, f.rowid ASC LIMIT 1"
+);
+const reserverPage = bd.prepare("UPDATE file SET etat = 'encours', lu_le = ? WHERE url = ? AND etat = 'attente'");
+const reserverHote = bd.prepare(
+  "INSERT INTO hotes (hote, occupe_jusqu_a) VALUES (?, ?) ON CONFLICT(hote) DO UPDATE SET occupe_jusqu_a = excluded.occupe_jusqu_a"
+);
+const libererHote = bd.prepare("UPDATE hotes SET occupe_jusqu_a = ? WHERE hote = ?");
+
+function prochaine() {
+  const maintenant = new Date().toISOString();
+  try {
+    bd.exec("BEGIN IMMEDIATE");
+    const ligne = choisir.get(maintenant);
+    if (!ligne) { bd.exec("COMMIT"); return null; }
+    const pris = reserverPage.run(maintenant, ligne.url);
+    if (!pris.changes) { bd.exec("COMMIT"); return null; }
+    // Le verrou tient le temps d une lecture au pire ; il sera repousse au vrai delai
+    // de politesse quand la page sera finie.
+    reserverHote.run(ligne.hote, new Date(Date.now() + 60000).toISOString());
+    bd.exec("COMMIT");
+    return ligne;
+  } catch (e) {
+    try { bd.exec("ROLLBACK"); } catch { /* deja defait */ }
+    return null;
+  }
+}
 async function lecteur() {
   for (;;) {
     if (PAGES_MAX && pagesLues >= PAGES_MAX) return;
     const ligne = prochaine();
-    if (!ligne) { await new Promise((s) => setTimeout(s, 1500)); continue; }
-    occupes.add(ligne.hote);
+    if (!ligne) { await new Promise((s) => setTimeout(s, 1200)); continue; }
     try {
       await traiter(ligne);
     } catch (e) {
       marquer.run("mur", new Date().toISOString(), ligne.url);
     } finally {
+      // On repousse le verrou du delai de politesse, jamais on ne le retire : le
+      // prochain robot qui regarde verra que cet hote vient d etre sollicite.
       const regles = memoireRobots.get(ligne.hote);
       const attente = Math.max(DELAI_HOTE, regles?.delai || 0);
-      setTimeout(() => occupes.delete(ligne.hote), attente);
+      try { libererHote.run(new Date(Date.now() + attente).toISOString(), ligne.hote); } catch { /* base occupee */ }
     }
   }
 }
-
 /* ------------------------------------------------------------------ semer */
 
 async function semer() {
@@ -506,6 +563,8 @@ if (process.argv.includes("--etat")) {
   const l = bd.prepare("SELECT COUNT(*) AS liens, COUNT(DISTINCT domaine_dest) AS cibles, COUNT(DISTINCT domaine_src) AS sources FROM liens").get();
   const h = bd.prepare("SELECT COUNT(*) AS n FROM hotes WHERE mur = 0").get();
   console.log("file :", f.map((x) => `${x.etat}=${x.n}`).join("  "));
+  const oc = bd.prepare("SELECT COUNT(*) AS n FROM hotes WHERE occupe_jusqu_a > ?").get(new Date().toISOString());
+  console.log("hotes verrouilles a l instant :", oc.n);
   console.log("index :", `${l.liens} lien(s), ${l.sources} source(s), ${l.cibles} domaine(s) cible(s) distincts`);
   console.log("hotes ouverts :", h.n);
   console.log("base :", (fs.statSync(BD).size / 1024 / 1024).toFixed(1), "Mo");
@@ -517,17 +576,17 @@ if (process.argv.includes("--semer")) {
   process.exit(0);
 }
 
-dire(`robot demarre : ${EN_VOL} hotes en parallele, ${DELAI_HOTE} ms entre deux pages d'un meme hote`);
-const attente = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE etat = 'attente'").get();
+dire(`robot demarre : bande de priorite ${PRIO_MIN}-${PRIO_MAX}, ${EN_VOL} hotes en parallele, ${DELAI_HOTE} ms entre deux pages d'un meme hote`);
+const attente = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE etat = 'attente' AND priorite BETWEEN ? AND ?").get(PRIO_MIN, PRIO_MAX);
 dire(`${attente.n} page(s) en file`);
 if (!attente.n) {
-  dire("file vide : lancez d'abord node serveur/crawler.mjs --semer");
+  dire(`file vide dans la bande ${PRIO_MIN}-${PRIO_MAX} : semez, ou elargissez la bande`);
   process.exit(0);
 }
 
 const minuterie = setInterval(() => {
-  const f = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE etat = 'attente'").get();
-  dire(`${pagesLues} page(s) lue(s), ${liensNotes} lien(s) note(s), ${f.n} en file`);
+  const f = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE etat = 'attente' AND priorite BETWEEN ? AND ?").get(PRIO_MIN, PRIO_MAX);
+  dire(`${pagesLues} page(s) lue(s), ${liensNotes} lien(s) note(s), ${f.n} en file dans ma bande`);
 }, 60000);
 
 await Promise.all(Array.from({ length: EN_VOL }, () => lecteur()));
