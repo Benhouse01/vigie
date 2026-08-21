@@ -108,7 +108,7 @@ async function publier() {
 if (process.argv.includes("--boucle")) {
   for (;;) {
     try { await publier(); } catch (e) { dire(`⛔ publication en echec : ${e.message}`); }
-    await new Promise((s) => setTimeout(s, Number(arg("attente", 10)) * 60000));
+    await new Promise((s) => setTimeout(s, Number(arg("attente", 1)) * 60000));
   }
 } else {
   await publier();

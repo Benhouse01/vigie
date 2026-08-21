@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vigie — analyse SEO et backlinks, gratuit et libre</title>
 <meta name="description" content="Backlinks, santé technique, indexabilité, popularité, pour n'importe quel domaine et pour vos concurrents. Un robot ouvre les pages et lit chaque lien pour de vrai. Gratuit, libre en AGPL, sans abonnement.">
-<meta property="og:title" content="Vigie — analyse SEO et backlinks, gratuit et libre">
+<meta property="og:title" content="Vigie — backlinks et analyse SEO, gratuit et libre">
 <meta property="og:description" content="Tapez un domaine, lancez le robot, voyez chaque lien avec son rel réel. Gratuit, sans abonnement. Le code est libre et s'améliore avec ceux qui l'utilisent.">
 <meta property="og:type" content="website">
+<meta property="og:image" content="https://vigie-seo.pages.dev/icone-512.png">
 <style>
 :root{
   color-scheme: light;
@@ -48,8 +49,7 @@ a{color:var(--bleu)}
   backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--bord)}
 .barre .env{display:flex;align-items:center;gap:14px;min-height:60px}
 .marque{display:flex;align-items:center;gap:10px;font-weight:660;letter-spacing:-.2px;text-decoration:none;color:inherit}
-.oeil{width:24px;height:24px;border-radius:8px;flex:none;
-  background:linear-gradient(140deg,var(--accent),var(--bleu));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.oeil{width:24px;height:24px;border-radius:8px;flex:none;display:block}
 .barre nav{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .barre nav a{color:var(--texte2);text-decoration:none;font-size:14px;padding:7px 12px;border-radius:999px}
 .barre nav a:hover{background:var(--neutre);color:var(--texte)}
@@ -210,11 +210,15 @@ pre code{background:none;padding:0}
 footer{padding:40px 0 70px;border-top:1px solid var(--bord);color:var(--doux);font-size:14px}
 footer a{color:var(--texte2)}
 </style>
+<link rel="icon" href="/marque.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#eb6834">
 </head>
 <body>
 
 <div class="barre"><div class="env">
-  <a class="marque" href="/"><span class="oeil"></span>Vigie</a>
+  <a class="marque" href="/"><img class="oeil" src="/marque.svg" width="24" height="24" alt="">Vigie</a>
   <nav>
     <a href="#pourquoi">Pourquoi</a>
     <a href="#vivant">Le code vivant</a>
@@ -225,7 +229,7 @@ footer a{color:var(--texte2)}
 </div></div>
 
 <header class="hero"><div class="env">
-  <h1>Les backlinks de n'importe quel site.<br><span class="sur">Gratuitement, et sans qu'on vous mente.</span></h1>
+  <h1>Les backlinks de n'importe quel site.<br><span class="sur">Gratuitement, et chaque lien avec sa preuve.</span></h1>
   <p class="chapeau">Un robot ouvre les pages et lit chaque lien dans le HTML servi : l'URL exacte,
   l'ancre, et le <code>rel</code> réel. Plus la santé technique, l'indexabilité et la popularité.
   Sur votre site comme sur celui de vos concurrents.</p>

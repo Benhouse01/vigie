@@ -59,6 +59,11 @@ export async function onRequestGet({ env }) {
     // Notre moteur, mesure sur la derniere heure reelle.
     moteur: {
       cadence_pages_par_jour: notre,
+      // ⛔ LA CADENCE PAR SECONDE SERT A ANIMER, PAS A MESURER. L interface fait monter
+      //    ses compteurs entre deux releves ; a chaque releve elle se RECALE sur la
+      //    valeur reelle. Sans recalage, un compteur anime derive et finit par afficher
+      //    un nombre que personne n a jamais mesure.
+      cadence_pages_par_seconde: notre ? notre / 86400 : 0,
       pages_derniere_heure: m.pages_derniere_heure ?? null,
       pages_depuis_le_debut: m.pages_depuis_le_debut ?? null,
       liens_indexes: m.liens_indexes ?? null,

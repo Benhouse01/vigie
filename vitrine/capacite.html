@@ -45,8 +45,7 @@ a{color:var(--bleu)}
   backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--bord)}
 .barre .env{display:flex;align-items:center;gap:14px;min-height:60px}
 .marque{display:flex;align-items:center;gap:10px;font-weight:660;letter-spacing:-.2px;text-decoration:none;color:inherit}
-.oeil{width:24px;height:24px;border-radius:8px;flex:none;
-  background:linear-gradient(140deg,var(--accent),var(--bleu));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.oeil{width:24px;height:24px;border-radius:8px;flex:none;display:block}
 .barre nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
 .barre nav a{color:var(--texte2);text-decoration:none;font-size:14px;padding:7px 12px;border-radius:999px}
 .barre nav a:hover{background:var(--neutre);color:var(--texte)}
@@ -79,6 +78,17 @@ p{max-width:72ch}
 .bouton:hover{opacity:.88}
 .mini{color:var(--doux);font-size:12.5px;margin-left:12px}
 .mesure{color:var(--doux);font-size:13px;margin-top:14px}
+.direct{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:640;
+  text-transform:uppercase;letter-spacing:.07em;color:var(--ok);margin-top:22px}
+.pouls{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;
+  animation:pouls 1.6s ease-in-out infinite}
+@keyframes pouls{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+.direct.mort{color:var(--attention)}
+.direct.mort .pouls{background:var(--attention);animation:none}
+/* ⛔ Un chiffre qui change dix fois par seconde fait sauter la mise en page si sa largeur
+   n est pas figee : les tuiles voisines bougeraient a chaque incrementation. */
+.tuile .n{min-height:1.15em;font-feature-settings:"tnum" 1}
+.tuile.monte .n{color:var(--ok)}
 .tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:20px}
 .tuile{background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);padding:17px 19px}
 .tuile .n{font-size:26px;font-weight:700;letter-spacing:-.9px;font-variant-numeric:tabular-nums;line-height:1.15}
@@ -109,11 +119,15 @@ footer{padding:38px 0 70px;border-top:1px solid var(--bord);color:var(--doux);fo
 footer a{color:var(--texte2)}
 .attente{color:var(--doux)}
 </style>
+<link rel="icon" href="/marque.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#eb6834">
 </head>
 <body>
 
 <div class="barre"><div class="env">
-  <a class="marque" href="/"><span class="oeil"></span>Vigie</a>
+  <a class="marque" href="/"><img class="oeil" src="/marque.svg" width="24" height="24" alt="">Vigie</a>
   <nav>
     <a href="/">Analyser</a>
     <a href="/capacite.html">Ce qu'on couvre</a>
@@ -123,10 +137,10 @@ footer a{color:var(--texte2)}
 
 <header><div class="env">
   <h1>Ce que Vigie couvre.<br><span class="sur">Et ce qu'il ne couvre pas.</span></h1>
-  <p class="chapeau">Un outil qui cache sa capacité ment par omission. Voici la capacité de
-  crawl de notre moteur, affichée à côté de celle des outils payants, avec leurs propres
-  chiffres et leurs sources. Le rapport n'est pas flatteur, et c'est justement pour ça
-  qu'il est écrit ici.</p>
+  <p class="chapeau">Vous méritez de savoir jusqu'où va la couverture avant de vous en
+  servir. Voici la capacité de crawl de notre moteur, affichée à côté de celle des outils
+  payants, avec leurs propres chiffres et leurs sources. Le rapport n'est pas flatteur,
+  et c'est justement pour ça qu'il est écrit ici.</p>
 
   <div class="phare">
     <div class="n">5 millions</div>
@@ -147,6 +161,7 @@ footer a{color:var(--texte2)}
       <span class="mini">Aucun don n'ouvre de fonctionnalité. Il achète du crawl, pour tout le monde.</span></p>
   </div>
 
+  <div class="direct" id="pouls"><span class="pouls"></span><span id="pouls-txt">en direct</span></div>
   <div id="tuiles" class="tuiles"></div>
   <p id="mesure" class="mesure"></p>
 </div></header>
@@ -242,56 +257,161 @@ function quand(s){
   return 'il y a ' + h + (h > 1 ? ' heures' : ' heure');
 }
 
-fetch('/api/capacite', { credentials:'same-origin' })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    var m = d.moteur || {};
-    var arret = m.etat === 'ANGLE_MORT';
+/*
+   LES COMPTEURS VIVANTS.
 
-    /* ⛔ LA CAPACITE ET LA CADENCE DU MOMENT SONT DEUX CHOSES DIFFERENTES, et les
-       confondre serait le genre de flou que cet outil refuse. Le chiffre de tete est la
-       CAPACITE de la machine. La ligne ci-dessous dit ce qui tourne REELLEMENT en ce
-       moment, mesuré sur la derniere heure : le moteur n'est pas a fond en permanence,
-       il l'est quand il y a du travail. */
-    document.getElementById('mesure').textContent = arret
-      ? '▲ Le moteur n’a rien publié depuis plus de deux heures : la cadence du moment est inconnue.'
-      : 'En ce moment : ' + nb(m.pages_derniere_heure) + ' pages lues dans la dernière heure, soit '
-        + millions(m.cadence_pages_par_jour) + ' par jour au rythme actuel. Mesuré ' + quand(d.mesure_le) + '.';
+   ⛔ CE QUI MONTE A L ECRAN ENTRE DEUX RELEVES EST UNE PROJECTION, PAS UNE MESURE.
+      Un compteur fige a la derniere valeur connue serait exact mais mort ; un compteur
+      qui monte tout seul serait vivant mais faux si rien ne le ramenait au reel. Les
+      deux a la fois : il avance a la vitesse REELLEMENT constatee entre les deux
+      derniers releves, et il se RECALE sur la valeur mesuree a chaque nouveau releve.
+      La vitesse n est jamais inventee : au premier chargement, tant qu on n a qu un
+      seul releve, seules les pages avancent, a la cadence que le serveur a publiee.
 
-    var s = d.service || {};
-    document.getElementById('tuiles').innerHTML =
-      tuile(nb(m.liens_indexes), 'liens dans l’index') +
-      tuile(nb(m.domaines_cibles), 'domaines cibles vus') +
-      tuile(nb(m.pages_depuis_le_debut), 'pages ouvertes en tout') +
-      tuile(nb(s.liens_confirmes), 'liens servis par le site') +
-      tuile(nb(s.domaines_annonces), 'domaines référents servis') +
-      tuile(nb(m.pages_en_file), 'pages en attente');
+   ⛔ ET LA PROJECTION EST PLAFONNEE. Si le serveur se tait, un compteur qui continue a
+      monter afficherait au bout d une heure un nombre que personne n a jamais mesure.
+      Passe trois intervalles sans releve, il s arrete et le point cesse de battre.
+*/
+var INTERVALLE = 15000;
+var CLES = [
+  ['liens_indexes', 'liens dans l’index'],
+  ['domaines_cibles', 'domaines cibles vus'],
+  ['pages_depuis_le_debut', 'pages ouvertes en tout'],
+  ['domaines_sources', 'sites déjà lus'],
+  ['liens_confirmes', 'liens servis par le site'],
+  ['pages_en_file', 'pages en attente'],
+];
 
-    var lignes = (d.reperes || []).map(function(r){
-      return '<tr><td><b>' + ech(r.nom) + '</b>' +
-        '<span class="cite">« ' + ech(r.citation) +' » — ' +
-        '<a href="' + ech(r.source) + '" target="_blank" rel="noopener nofollow">source</a></span></td>' +
-        '<td class="num">' + millions(r.pages_par_jour) + '</td>' +
-        '<td class="num">× RAPPORT_' + r.pages_par_jour + '</td></tr>';
-    }).join('');
+var etat = {
+  reel: null,        // dernieres valeurs mesurees
+  quand: 0,          // date de ce releve
+  vitesse: {},       // unites par milliseconde, constatees entre deux releves
+  vivant: false,
+};
 
-    var CAPACITE = 5000000;
-    lignes += '<tr class="nous"><td><b>Vigie</b>' +
-      '<span class="cite">capacité de crawl actuelle, sur un serveur loué au mois. ' +
-      'En ce moment le moteur tourne à ' + millions(m.cadence_pages_par_jour) + ' par jour.</span></td>' +
-      '<td class="num"><b>5 millions</b></td>' +
-      '<td class="num"><b>× 1</b></td></tr>';
-    lignes = lignes.replace(/RAPPORT_(\d+)/g, function(_, p){ return nb(Math.round(Number(p) / CAPACITE)); });
+function compteursVivants(){
+  var boite = document.getElementById('tuiles');
+  boite.innerHTML = CLES.map(function(c){
+    return '<div class="tuile" data-cle="' + c[0] + '"><div class="n">—</div>' +
+      '<div class="l">' + ech(c[1]) + '</div></div>';
+  }).join('');
+}
 
-    document.getElementById('comparaison').innerHTML =
-      '<thead><tr><th>Moteur</th><th style="text-align:right">Pages par jour</th>' +
-      '<th style="text-align:right">Rapport</th></tr></thead><tbody>' + lignes + '</tbody>';
-  })
-  .catch(function(){
-    document.getElementById('phare').innerHTML =
-      '<div class="n" style="color:var(--attention)">▲</div>' +
-      '<div class="u">Les mesures n’ont pas pu être lues. Ce n’est pas zéro, c’est inconnu.</div>';
+function dessinerCompteurs(){
+  if (!etat.reel) return;
+  var dt = Date.now() - etat.quand;
+  // Au-dela de trois intervalles sans releve, on cesse de projeter.
+  var fige = dt > INTERVALLE * 3;
+  if (fige) dt = INTERVALLE * 3;
+
+  CLES.forEach(function(c){
+    var cle = c[0];
+    var el = document.querySelector('.tuile[data-cle="' + cle + '"] .n');
+    if (!el) return;
+    var base = etat.reel[cle];
+    if (base === null || base === undefined) { el.textContent = '▲'; return; }
+    var v = base + (etat.vitesse[cle] || 0) * dt;
+    el.textContent = nb(Math.max(0, Math.floor(v)));
   });
+
+  var p = document.getElementById('pouls');
+  var txt = document.getElementById('pouls-txt');
+  if (fige || !etat.vivant){
+    p.className = 'direct mort';
+    txt.textContent = etat.vivant ? 'relevé en retard' : 'moteur silencieux';
+  } else {
+    p.className = 'direct';
+    txt.textContent = 'en direct, recalé toutes les ' + (INTERVALLE / 1000) + ' secondes';
+  }
+}
+
+function relever(){
+  fetch('/api/capacite', { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var m = d.moteur || {};
+      var s = d.service || {};
+      var neuf = {
+        liens_indexes: m.liens_indexes,
+        domaines_cibles: m.domaines_cibles,
+        pages_depuis_le_debut: m.pages_depuis_le_debut,
+        domaines_sources: m.domaines_sources,
+        liens_confirmes: s.liens_confirmes,
+        pages_en_file: m.pages_en_file,
+      };
+      var maintenant = Date.now();
+
+      if (etat.reel){
+        var ecoule = maintenant - etat.quand;
+        if (ecoule > 1000){
+          CLES.forEach(function(c){
+            var cle = c[0];
+            var a = etat.reel[cle], b = neuf[cle];
+            if (typeof a === 'number' && typeof b === 'number'){
+              // La vitesse constatee, lissee pour qu un a-coup de releve ne fasse pas
+              // bondir l affichage.
+              var brute = (b - a) / ecoule;
+              var avant = etat.vitesse[cle] || 0;
+              etat.vitesse[cle] = avant ? avant * 0.4 + brute * 0.6 : brute;
+            }
+          });
+        }
+      } else if (m.cadence_pages_par_seconde){
+        // Premier releve : on ne connait qu une vitesse, celle des pages, publiee par
+        // le serveur. Les autres restent a zero jusqu au releve suivant, plutot que
+        // d etre devinees.
+        etat.vitesse.pages_depuis_le_debut = m.cadence_pages_par_seconde / 1000;
+      }
+
+      etat.reel = neuf;
+      etat.quand = maintenant;
+      etat.vivant = m.etat === 'MESURE';
+
+      document.getElementById('mesure').textContent = etat.vivant
+        ? 'Cadence mesurée sur la dernière heure réelle : ' + nb(m.pages_derniere_heure) +
+          ' pages, soit ' + millions(m.cadence_pages_par_jour) + ' par jour à ce rythme. ' +
+          'Relevé ' + quand(d.mesure_le) + '.'
+        : '▲ Le moteur n’a rien publié depuis plus de deux heures : la cadence du moment est inconnue.';
+
+      if (!document.getElementById('comparaison').dataset.pret) dessinerComparaison(d, m);
+      dessinerCompteurs();
+    })
+    .catch(function(){
+      etat.vivant = false;
+      dessinerCompteurs();
+    });
+}
+
+function dessinerComparaison(d, m){
+  var CAPACITE = 5000000;
+  var lignes = (d.reperes || []).map(function(r){
+    return '<tr><td><b>' + ech(r.nom) + '</b>' +
+      '<span class="cite">« ' + ech(r.citation) + ' » — ' +
+      '<a href="' + ech(r.source) + '" target="_blank" rel="noopener nofollow">source</a></span></td>' +
+      '<td class="num">' + millions(r.pages_par_jour) + '</td>' +
+      '<td class="num">× ' + nb(Math.round(r.pages_par_jour / CAPACITE)) + '</td></tr>';
+  }).join('');
+
+  lignes += '<tr class="nous"><td><b>Vigie</b>' +
+    '<span class="cite">capacité de crawl actuelle, sur un serveur loué au mois. ' +
+    'En ce moment le moteur tourne à ' + millions(m.cadence_pages_par_jour) + ' par jour.</span></td>' +
+    '<td class="num"><b>5 millions</b></td>' +
+    '<td class="num"><b>× 1</b></td></tr>';
+
+  var t = document.getElementById('comparaison');
+  t.innerHTML =
+    '<thead><tr><th>Moteur</th><th style="text-align:right">Pages par jour</th>' +
+    '<th style="text-align:right">Rapport</th></tr></thead><tbody>' + lignes + '</tbody>';
+  t.dataset.pret = '1';
+}
+
+compteursVivants();
+relever();
+setInterval(relever, INTERVALLE);
+// Trente images par seconde suffisent a donner l impression du direct sans faire
+// chauffer le telephone de qui laisse la page ouverte.
+setInterval(dessinerCompteurs, 33);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) relever(); });
 
 function tuile(n, l){
   return '<div class="tuile"><div class="n">' + n + '</div><div class="l">' + ech(l) + '</div></div>';
