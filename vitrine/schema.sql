@@ -103,3 +103,28 @@ CREATE TABLE IF NOT EXISTS robots_cache (
   delai    REAL NOT NULL DEFAULT 0,
   lu_le    TEXT NOT NULL
 );
+
+-- LES DOMAINES REFERENTS CONNUS SANS QUE L'URL EXACTE LE SOIT.
+--
+-- ⛔ C'EST UN NIVEAU DE PREUVE DIFFERENT, ET IL NE DOIT PAS SE MELANGER AU PRECEDENT.
+--    La table `backlinks` ne contient que ce qui a ete LU dans le HTML servi : URL de
+--    la page, destination, ancre, rel. Ici on sait seulement qu'un domaine pointe vers
+--    la cible, parce qu'un index l'annonce (Bing Webmaster, graphe Common Crawl) ; on
+--    n'a ni la page ni le rel. Les afficher ensemble sans le dire donnerait a un
+--    chiffre d'index l'apparence d'une mesure, ce qui est exactement le reproche fait
+--    aux outils payants.
+--
+--    Le robot travaille a faire PASSER ces lignes dans `backlinks` : il ouvre les pages
+--    du domaine annonce jusqu'a trouver le lien. Tant qu'il n'a pas trouve, la ligne
+--    reste ici et l'ecran dit « annonce par un index, page pas encore trouvee ».
+CREATE TABLE IF NOT EXISTS referents (
+  cible       TEXT NOT NULL,
+  domaine_src TEXT NOT NULL,
+  liens       INTEGER,               -- ce que l'index annonce, jamais un compte a nous
+  source      TEXT NOT NULL,         -- bing_webmaster | common_crawl | ...
+  etat        TEXT NOT NULL,         -- MESURE
+  nature      TEXT NOT NULL,         -- mesure | plancher
+  vu_le       TEXT NOT NULL,
+  PRIMARY KEY (cible, domaine_src, source)
+);
+CREATE INDEX IF NOT EXISTS idx_ref_cible ON referents(cible);

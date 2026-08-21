@@ -54,6 +54,28 @@ export async function onRequestGet({ request, env }) {
 
   const etat = await etatCrawl(bd, cible);
 
+  // Les pages ouvertes qui CITENT le domaine sans porter de lien cliquable, et celles
+  // qui n ont pas pu etre ouvertes. Les deux sont des mesures, et les taire reviendrait
+  // a laisser croire que seul ce qui est confirme existe.
+  // ⛔ DEUX NIVEAUX DE PREUVE, JAMAIS MELANGES SANS LE DIRE.
+  //    `backlinks` ne contient que ce qui a ete LU dans le HTML servi. `referents` contient
+  //    les domaines qu un index ANNONCE, sans page ni rel. Les fondre en un seul nombre
+  //    donnerait a un chiffre d index l apparence d une mesure : c est exactement le
+  //    reproche fait aux outils payants, et ce serait le faire a notre tour.
+  const annonces = await bd
+    .prepare(
+      "SELECT domaine_src, liens, source, nature, vu_le FROM referents WHERE cible = ? ORDER BY liens DESC LIMIT 900"
+    )
+    .bind(cible)
+    .all();
+
+  const [mentions, murs] = await Promise.all([
+    bd.prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = ? ORDER BY url LIMIT 150")
+      .bind(cible, "mention").all(),
+    bd.prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = ? ORDER BY url LIMIT 100")
+      .bind(cible, "mur").all(),
+  ]);
+
   return json({
     cible,
     liens: lignes.results || [],
@@ -62,6 +84,13 @@ export async function onRequestGet({ request, env }) {
     total_affichable: compte_total?.n ?? 0,
     domaines: parDomaine.results || [],
     repartition_rel: parRel.results || [],
+    referents_annonces: annonces.results || [],
+    referents_annonces_nature:
+      "Domaines qu un index (Bing Webmaster, graphe Common Crawl) annonce comme pointant vers " +
+      "la cible. La page exacte et le rel ne sont PAS connus : le robot travaille a les trouver, " +
+      "et chaque domaine confirme passe dans le tableau des liens lus.",
+    mentions: mentions.results || [],
+    murs: murs.results || [],
     robot: etat,
     // La phrase que l'interface doit reprendre telle quelle. Elle dit ce que ce
     // nombre est, et surtout ce qu'il n'est pas.

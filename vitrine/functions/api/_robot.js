@@ -220,6 +220,7 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
   let murs = 0;
   let liens = 0;
   let descendus = 0;
+  let mentions = 0;
   const ecritures = [];
 
   for (const page of pages) {
@@ -284,8 +285,20 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
       }
       ecritures.push(bd.prepare("UPDATE candidats SET etat = 'lu' WHERE cible = ? AND url = ?").bind(cible, page.url));
     } else {
-      // La page s'est ouverte et ne porte aucun lien : c'est une MESURE, pas un echec.
-      ecritures.push(bd.prepare("UPDATE candidats SET etat = 'vide' WHERE cible = ? AND url = ?").bind(cible, page.url));
+      // ⛔ « AUCUN LIEN » ET « AUCUNE MENTION » NE SONT PAS LA MEME CHOSE.
+      //    Une page peut nommer le domaine en toutes lettres sans qu aucune balise <a>
+      //    ne pointe vers lui. Trois causes, toutes vues le 21/08/2026 : le lien est
+      //    pose par du JavaScript et n existe pas dans le HTML servi ; il passe par un
+      //    redirecteur d affiliation, donc son adresse ne contient pas le domaine ; ou
+      //    le site cite sans lier. Ranger ces pages avec les pages reellement vides
+      //    reviendrait a affirmer « personne ne parle de vous » alors qu on a lu le
+      //    contraire. Elles sortent donc dans leur propre categorie.
+      const citee = res.html.toLowerCase().includes(cible.toLowerCase());
+      ecritures.push(
+        bd.prepare("UPDATE candidats SET etat = ? WHERE cible = ? AND url = ?")
+          .bind(citee ? "mention" : "vide", cible, page.url)
+      );
+      if (citee) mentions++;
 
       // ...et on descend d'un cran, une seule fois, vers ses pages a liens.
       if (!String(page.origine).endsWith("-p2")) {
@@ -330,5 +343,5 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
     await bd.prepare("UPDATE file_crawl SET fini_le = ? WHERE cible = ?").bind(MAINTENANT(), cible).run();
   }
 
-  return { fait: "verification", cible, pages_lues: lus, murs, liens, descendus, restants: restants?.n ?? 0 };
+  return { fait: "verification", cible, pages_lues: lus, murs, liens, descendus, mentions, restants: restants?.n ?? 0 };
 }

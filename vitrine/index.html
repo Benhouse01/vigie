@@ -614,20 +614,63 @@ function puceRel(rel){
   return '<span class="puce nonsuivi">' + ech(rel) + '</span>';
 }
 
+/*
+   ⛔ DEUX NIVEAUX DE PREUVE DANS LE MEME TABLEAU, ET LA COLONNE QUI LES SEPARE.
+   Une ligne « lien lu » a ete ouverte : on connait sa page, son ancre et son rel.
+   Une ligne « annoncé » vient d'un index qui affirme que ce domaine pointe vers la
+   cible, sans qu'on ait trouve la page. Les fondre en un seul nombre donnerait a un
+   chiffre d'index l'apparence d'une mesure. C'est le reproche qu'on fait aux outils
+   payants ; le faire ici serait devenir ce qu'on critique.
+*/
 function tableauDomaines(b){
-  var lignes = (b.domaines || []).map(function(d){
-    var part = d.liens ? Math.round(d.suivis * 100 / d.liens) : 0;
+  var confirmes = {};
+  var rangs = (b.domaines || []).map(function(d){
+    confirmes[d.domaine_src] = true;
+    return {
+      dom: d.domaine_src, liens: d.liens, suivis: d.suivis,
+      depuis: d.depuis, connu_par: 'lu'
+    };
+  });
+  (b.referents_annonces || []).forEach(function(r){
+    if (confirmes[r.domaine_src]) return;
+    rangs.push({
+      dom: r.domaine_src, liens: r.liens, suivis: null,
+      depuis: r.vu_le, connu_par: 'annonce', source: r.source, nature: r.nature
+    });
+  });
+
+  var lignes = rangs.map(function(d){
+    var preuve, dofollow;
+    if (d.connu_par === 'lu'){
+      var part = d.liens ? Math.round(d.suivis * 100 / d.liens) : 0;
+      preuve = '<span class="puce suivi">lien lu</span>';
+      dofollow = nb(d.suivis) + ' <span style="color:var(--doux)">(' + part + ' %)</span>';
+    } else {
+      preuve = '<span class="puce nonsuivi" title="' + ech(d.source || '') + '">annoncé par ' +
+        ech((d.source || 'un index').replace(/_/g, ' ')) + '</span>';
+      dofollow = '<span style="color:var(--doux)">page pas encore trouvée</span>';
+    }
     return '<tr>' +
-      '<td><span class="dom">' + ech(d.domaine_src) + '</span></td>' +
-      '<td class="num">' + nb(d.liens) + '</td>' +
-      '<td class="num">' + nb(d.suivis) + ' <span style="color:var(--doux)">(' + part + ' %)</span></td>' +
+      '<td><span class="dom">' + ech(d.dom) + '</span></td>' +
+      '<td>' + preuve + '</td>' +
+      '<td class="num">' + (d.nature === 'plancher' ? '≥ ' : '') + nb(d.liens) + '</td>' +
+      '<td class="num">' + dofollow + '</td>' +
       '<td class="num" style="color:var(--doux)">' + ech(String(d.depuis || '').slice(0,10)) + '</td>' +
-      '<td><a href="https://' + ech(d.domaine_src) + '" target="_blank" rel="noopener nofollow">ouvrir ↗</a></td>' +
+      '<td><a href="https://' + ech(d.dom) + '" target="_blank" rel="noopener nofollow">ouvrir ↗</a></td>' +
     '</tr>';
   }).join('');
-  if (!lignes) return '<div class="vide">Aucun domaine référent confirmé pour ce filtre.</div>';
-  return '<div class="tableau"><table><thead><tr>' +
-    '<th>Domaine référent</th><th style="text-align:right">Liens</th>' +
+
+  var note = b.referents_annonces_nature && (b.referents_annonces || []).length
+    ? '<div class="sources"><p class="n" style="margin:0"><b>Deux niveaux de preuve dans ce tableau.</b> ' +
+      '« lien lu » veut dire que le robot a ouvert la page et lu le lien dans le HTML servi. ' +
+      '« annoncé » veut dire qu\'un index affirme que ce domaine pointe vers la cible, sans qu\'on ' +
+      'ait encore trouvé la page ni le <code>rel</code>. Le robot travaille à faire passer les ' +
+      'seconds dans les premiers.</p></div>'
+    : '';
+
+  if (!lignes) return note + '<div class="vide">Aucun domaine référent pour ce filtre.</div>';
+  return note + '<div class="tableau"><table><thead><tr>' +
+    '<th>Domaine référent</th><th>Comment on le sait</th><th style="text-align:right">Liens</th>' +
     '<th style="text-align:right">Dofollow</th><th style="text-align:right">Vu le</th><th></th>' +
     '</tr></thead><tbody>' + lignes + '</tbody></table></div>';
 }
@@ -660,6 +703,42 @@ function tableauLiens(b){
     '</tr></thead><tbody>' + lignes + '</tbody></table></div>' + suite;
 }
 
+function tableauMentions(b){
+  var lignes = (b.mentions || []).map(function(m){
+    var dom = '';
+    try { dom = new URL(m.url).hostname.replace(/^www\./, ''); } catch(e){ dom = m.url; }
+    return '<tr><td><span class="dom">' + ech(dom) + '</span>' +
+      '<a class="url" href="' + ech(m.url) + '" target="_blank" rel="noopener nofollow">' + ech(m.url) + '</a></td>' +
+      '<td class="num" style="color:var(--doux)">' + ech(m.origine) + '</td></tr>';
+  }).join('');
+  var note = '<div class="sources"><p class="n" style="margin:0">Ces pages <b>nomment le domaine</b> ' +
+    'et ne portent aucune balise de lien vers lui dans le HTML servi. Trois causes possibles, et ' +
+    'elles se distinguent en ouvrant la page : le lien est posé par du JavaScript et n’existe pas ' +
+    'dans le HTML ; il passe par un redirecteur d’affiliation, donc son adresse ne contient pas le ' +
+    'domaine ; ou le site cite sans lier. Les ranger avec les pages vides reviendrait à dire ' +
+    '« personne ne parle de vous » alors qu’on a lu le contraire.</p></div>';
+  if (!lignes) return note + '<div class="vide">Aucune mention sans lien pour l’instant.</div>';
+  return note + '<div class="tableau"><table><thead><tr><th>Page qui vous nomme</th>' +
+    '<th style="text-align:right">Trouvée par</th></tr></thead><tbody>' + lignes + '</tbody></table></div>';
+}
+
+function tableauMurs(b){
+  var lignes = (b.murs || []).map(function(m){
+    var dom = '';
+    try { dom = new URL(m.url).hostname.replace(/^www\./, ''); } catch(e){ dom = m.url; }
+    return '<tr><td><span class="dom">' + ech(dom) + '</span>' +
+      '<a class="url" href="' + ech(m.url) + '" target="_blank" rel="noopener nofollow">' + ech(m.url) + '</a></td>' +
+      '<td class="num" style="color:var(--doux)">' + ech(m.origine) + '</td></tr>';
+  }).join('');
+  var note = '<div class="sources"><p class="n" style="margin:0">\u25B2 Ces pages <b>n’ont pas pu être ' +
+    'ouvertes</b> : un 403, un contrôle anti-robot, un délai dépassé, ou un <code>robots.txt</code> ' +
+    'qui nous l’interdit et que le robot respecte. Elles portent peut-être un lien, on ne le sait ' +
+    'pas. Les compter comme zéro transformerait nos propres blocages en jugement sur les autres.</p></div>';
+  if (!lignes) return note + '<div class="vide">Aucun mur rencontré.</div>';
+  return note + '<div class="tableau"><table><thead><tr><th>Page non ouverte</th>' +
+    '<th style="text-align:right">Trouvée par</th></tr></thead><tbody>' + lignes + '</tbody></table></div>';
+}
+
 function dessinerBacklinks(){
   var boite = document.getElementById('bl');
   if (!boite || !etatBl.donnees) return;
@@ -687,13 +766,17 @@ function dessinerBacklinks(){
   }
 
   var corps;
-  if (!total && !enCours){
+  var annonces = (b.referents_annonces || []).length;
+  if (!total && !annonces && !enCours && etatBl.onglet !== 'mentions' && etatBl.onglet !== 'murs'){
     corps = '<div class="vide"><b>Aucun lien confirmé pour l’instant.</b>' +
       'L’index partagé ne connaît pas encore ce domaine. Lancez le robot : il cherche les pages qui ' +
       'citent ce site, les ouvre une par une, et ne garde que les liens qu’il a réellement lus dans ' +
       'le HTML servi.</div>';
   } else {
-    corps = etatBl.onglet === 'domaines' ? tableauDomaines(b) : tableauLiens(b);
+    corps = etatBl.onglet === 'domaines' ? tableauDomaines(b)
+         : etatBl.onglet === 'mentions' ? tableauMentions(b)
+         : etatBl.onglet === 'murs' ? tableauMurs(b)
+         : tableauLiens(b);
   }
 
   boite.innerHTML =
@@ -708,13 +791,15 @@ function dessinerBacklinks(){
       panneauSources(robot) +
       '<div class="chiffres">' +
         chiffre(nb(total), 'liens confirmés') +
-        chiffre(nb((b.domaines || []).length), 'domaines référents') +
+        chiffre(nb((b.domaines || []).length + (b.referents_annonces || []).length), 'domaines référents') +
         chiffre(partSuivis === null ? '—' : partSuivis + ' %', 'en dofollow') +
         chiffre(nb(robot ? robot.pages_lues : 0), 'pages ouvertes') +
       '</div>' +
       '<div class="onglets">' +
         '<button class="onglet" data-o="domaines" aria-selected="' + (etatBl.onglet === 'domaines') + '">Domaines référents</button>' +
         '<button class="onglet" data-o="liens" aria-selected="' + (etatBl.onglet === 'liens') + '">Tous les liens</button>' +
+        '<button class="onglet" data-o="mentions" aria-selected="' + (etatBl.onglet === 'mentions') + '">Mentions sans lien (' + nb((b.mentions || []).length) + ')</button>' +
+        '<button class="onglet" data-o="murs" aria-selected="' + (etatBl.onglet === 'murs') + '">\u25B2 Non ouvertes (' + nb((b.murs || []).length) + ')</button>' +
         '<span class="filtres"><select id="bl-rel" aria-label="filtrer par attribut rel">' +
           '<option value=""' + (etatBl.rel === '' ? ' selected' : '') + '>tous les liens</option>' +
           '<option value="dofollow"' + (etatBl.rel === 'dofollow' ? ' selected' : '') + '>dofollow seulement</option>' +
