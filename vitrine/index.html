@@ -768,10 +768,28 @@ function dessinerBacklinks(){
   var corps;
   var annonces = (b.referents_annonces || []).length;
   if (!total && !annonces && !enCours && etatBl.onglet !== 'mentions' && etatBl.onglet !== 'murs'){
-    corps = '<div class="vide"><b>Aucun lien confirmé pour l’instant.</b>' +
-      'L’index partagé ne connaît pas encore ce domaine. Lancez le robot : il cherche les pages qui ' +
-      'citent ce site, les ouvre une par une, et ne garde que les liens qu’il a réellement lus dans ' +
-      'le HTML servi.</div>';
+    /*
+       Trois situations bien differentes, et les confondre serait mentir :
+       - le domaine est ABSENT du graphe du web (trop recent pour l edition en cours) ;
+       - le graphe n a pas encore ete interroge pour lui ;
+       - il a ete interrogé et ne recoit rien.
+    */
+    var msg = robot && robot.phase_msg ? String(robot.phase_msg) : '';
+    if (msg.indexOf('absent de l edition') >= 0){
+      corps = '<div class="vide"><b>▲ Ce domaine est absent de l’édition en cours du graphe du web.</b>' +
+        'Le graphe est reconstruit chaque trimestre sur des milliards de pages. Un domaine créé ' +
+        'depuis la dernière édition n’y figure pas encore, et <b>ça ne dit rien de ses backlinks</b> : ' +
+        'c’est cette source-là qui ne peut pas répondre, pas le site qui n’a pas de liens. ' +
+        'Le robot, lui, peut quand même chercher page par page.</div>';
+    } else if (!annonces){
+      corps = '<div class="vide"><b>Le graphe du web est interrogé pour ce domaine.</b>' +
+        'Une passe lit les 2,7 milliards de liens du dernier crawl public et rend la liste nommée ' +
+        'des domaines qui pointent vers ce site. Comptez une demi-heure la première fois, puis ' +
+        'c’est immédiat pour toujours. Vous pouvez fermer cette page. ' +
+        'En attendant, le robot peut chercher page par page.</div>';
+    } else {
+      corps = '<div class="vide">Aucun lien confirmé pour ce filtre.</div>';
+    }
   } else {
     corps = etatBl.onglet === 'domaines' ? tableauDomaines(b)
          : etatBl.onglet === 'mentions' ? tableauMentions(b)

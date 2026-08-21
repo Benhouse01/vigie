@@ -29,6 +29,7 @@
 //   node serveur/service.mjs --une-passe   une seule passe, puis sortie
 //   node serveur/service.mjs --cibles=a.com,b.com   force ces cibles
 
+import fs from "node:fs";
 import { referentsDe } from "./graphe-referents.mjs";
 
 const arg = (nom, defaut = null) => {
@@ -87,41 +88,51 @@ async function fileDattente() {
   return lignes.map((l) => l.cible);
 }
 
-/** Ecrit les domaines referents d'une cible, par paquets que D1 accepte. */
+// ⛔ D1 N ACCEPTE QUE CENT VARIABLES LIEES PAR REQUETE.
+//    Mesure du 21/08/2026 : un lot de cinquante lignes a cinq colonnes liees fait deux
+//    cent cinquante variables, et D1 rend « too many SQL variables at offset 954 ». Le
+//    message ne nomme ni la limite ni la requete, et il arrive APRES que la moitie du
+//    travail est faite, donc il ressemble a une panne reseau.
+//
+//    Le remede n est pas de reduire le lot a quinze lignes : ce serait multiplier par
+//    trois le nombre d allers-retours. Trois des cinq colonnes sont CONSTANTES sur tout
+//    le lot (la cible, la nature, la date). On les lie donc UNE FOIS avec la notation
+//    numerotee ?1 ?2 ?3, que SQLite reutilise autant de fois qu on veut, et seul le nom
+//    de domaine coute une variable par ligne. Quatre-vingt-dix lignes par requete au
+//    lieu de dix-neuf.
+const PARAMS_MAX = 100;
+const LIGNES_PAR_LOT = PARAMS_MAX - 3 - 5;   // trois constantes, et une marge
+
+/** Ecrit les domaines referents d une cible, par lots que D1 accepte. */
 async function pousser(cible, domaines, tronque, plafond) {
   const maintenant = new Date().toISOString();
   const retenus = domaines.slice(0, PLAFOND_D1);
+  // ⛔ « nature » DIT SI LE NOMBRE EST UN COMPTE OU UN PLANCHER. Des qu on a coupe, que
+  //    ce soit au plafond de la passe ou a celui de D1, ce n est plus un total.
+  const nature = tronque > 0 || domaines.length > PLAFOND_D1 ? "plancher" : "mesure";
   let ecrits = 0;
 
-  for (let i = 0; i < retenus.length; i += 50) {
-    const paquet = retenus.slice(i, i + 50);
-    const valeurs = paquet.map(() => "(?, ?, ?, 'common_crawl', 'MESURE', ?, ?)").join(", ");
-    // ⛔ « nature » DIT SI LE NOMBRE EST UN COMPTE OU UN PLANCHER. Des qu'on a coupe,
-    //    que ce soit au plafond de la passe ou a celui de D1, ce n'est plus un total.
-    const coupe = tronque > 0 || domaines.length > PLAFOND_D1;
-    const params = paquet.flatMap((d) => [cible, d, null, coupe ? "plancher" : "mesure", maintenant]);
+  for (let i = 0; i < retenus.length; i += LIGNES_PAR_LOT) {
+    const lot = retenus.slice(i, i + LIGNES_PAR_LOT);
+    const valeurs = lot.map((_, k) => "(?1, ?" + (k + 4) + ", NULL, 'common_crawl', 'MESURE', ?2, ?3)").join(", ");
     await sql(
-      `INSERT INTO referents (cible, domaine_src, liens, source, etat, nature, vu_le)
-       VALUES ${valeurs}
-       ON CONFLICT(cible, domaine_src, source) DO UPDATE SET vu_le = excluded.vu_le, nature = excluded.nature`,
-      params
+      "INSERT INTO referents (cible, domaine_src, liens, source, etat, nature, vu_le) VALUES " +
+        valeurs +
+        " ON CONFLICT(cible, domaine_src, source) DO UPDATE SET vu_le = excluded.vu_le, nature = excluded.nature",
+      [cible, nature, maintenant, ...lot]
     );
-    ecrits += paquet.length;
+    ecrits += lot.length;
   }
 
   const dehors = Math.max(0, domaines.length - retenus.length) + tronque;
   const message =
-    `${ecrits} domaine(s) referent(s) du graphe du web` +
-    (dehors ? ` (au moins ${dehors} de plus, non charges)` : "");
+    ecrits + " domaine(s) referent(s) lus dans le graphe du web" +
+    (dehors ? " (au moins " + dehors + " de plus, non charges)" : "");
 
-  await sql(
-    `UPDATE file_crawl SET phase_msg = ? WHERE cible = ?`,
-    [message, cible]
-  );
+  await sql("UPDATE file_crawl SET phase_msg = ?, etat = 'fini' WHERE cible = ?", [message, cible]);
 
   return { ecrits, dehors };
 }
-
 /** Une cible demandee a la main doit exister dans la file, sinon rien ne la suivra. */
 async function assurerDansLaFile(cibles) {
   const maintenant = new Date().toISOString();
@@ -133,6 +144,38 @@ async function assurerDansLaFile(cibles) {
       [c, maintenant]
     );
   }
+}
+
+/**
+ * Pousse un resultat DEJA calcule, sans refaire la passe.
+ *
+ * ⛔ UNE PASSE COUTE VINGT-HUIT MINUTES DE LECTURE. La refaire parce qu une ecriture a
+ *    echoue serait absurde : le resultat est ecrit sur le disque des qu il est calcule,
+ *    et cette entree-la le reprend tel quel. C est aussi ce qui permet de rejouer un
+ *    chargement apres avoir corrige la table d arrivee.
+ */
+async function pousserFichier(chemin) {
+  const j = JSON.parse(fs.readFileSync(chemin, "utf8"));
+  const cibles = Object.keys(j.cibles || {});
+  dire("reprise de " + chemin + " : edition " + j.edition + ", " + cibles.length + " cible(s)");
+  await assurerDansLaFile(cibles);
+  let total = 0;
+  for (const cible of cibles) {
+    const v = j.cibles[cible];
+    const r = await pousser(cible, v.domaines || [], v.tronque || 0, v.plafond || 0);
+    total += r.ecrits;
+    dire("  " + cible + " : " + r.ecrits + " ecrit(s)" + (r.dehors ? ", " + r.dehors + " laisse(s) dehors" : ""));
+  }
+  for (const cible of j.absentes_du_graphe || []) {
+    await assurerDansLaFile([cible]);
+    await sql("UPDATE file_crawl SET phase_msg = ? WHERE cible = ?", [
+      "▲ absent de l edition en cours du graphe du web, ce qui ne dit rien de ses backlinks",
+      cible,
+    ]);
+    dire("  " + cible + " : absent du graphe");
+  }
+  dire(total + " ligne(s) ecrite(s)");
+  return total;
 }
 
 async function unePasse() {
@@ -174,7 +217,10 @@ async function unePasse() {
 
 dire(`service demarre, plafond D1 = ${PLAFOND_D1}, attente entre passes = ${ATTENTE_MIN} min`);
 
-if (process.argv.includes("--une-passe") || arg("cibles")) {
+const depuis = arg("depuis");
+if (depuis) {
+  await pousserFichier(depuis);
+} else if (process.argv.includes("--une-passe") || arg("cibles")) {
   await unePasse();
 } else {
   for (;;) {
