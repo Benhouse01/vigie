@@ -20,6 +20,51 @@ import {
 } from "./_commun.js";
 import { trouverCandidats } from "./_decouverte.js";
 
+
+/**
+ * LES PAGES OU VIVENT LES LIENS SORTANTS.
+ *
+ * ⛔ LE CONSTAT QUI JUSTIFIE CE SECOND NIVEAU, MESURE LE 21/08/2026 :
+ *    la source « reciproque » met en file l'ACCUEIL des sites que la cible cite
+ *    elle-meme. Huit accueils de partenaires ouverts, zero lien trouve. C'est normal
+ *    et ce n'est pas une absence de lien : un partenaire ne met presque jamais ses
+ *    liens sortants sur son accueil, il les met sur « /partenaires », « /integrations »,
+ *    « /outils », « /avis ». Ces pages-la ne sont indexees nulle part et aucun moteur
+ *    ne les rendra jamais en resultat.
+ *
+ *    On les atteint donc en descendant d'un cran : une page candidate qui s'ouvre sans
+ *    porter de lien vers la cible offre ses propres liens internes, et ceux dont
+ *    l'adresse ressemble a une page de liens repartent en file. UN SEUL cran : au-dela,
+ *    le budget part en exploration au lieu de mesure.
+ */
+const PAGES_A_LIENS =
+  /(partenaire|partner|integration|ecosyst|marketplace|annuaire|director|outil|tool|app|logiciel|software|ressource|resource|avis|review|comparat|alternativ|lien|link|blog|actualit|news|presse|press|a-propos|about|nos-|our-)/i;
+
+/** Jusqu'a « combien » pages internes d'une page ouverte, qui promettent des liens. */
+function pagesInternesProbables(html, hote, combien = 4) {
+  const vues = new Set();
+  const sortie = [];
+  const re = /href\s*=\s*["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) !== null && sortie.length < combien) {
+    const brut = m[1].trim();
+    if (!brut || brut.startsWith("#") || /^(javascript|mailto|tel):/i.test(brut)) continue;
+    let u;
+    try { u = new URL(brut, "https://" + hote + "/"); } catch { continue; }
+    if (u.protocol !== "https:" && u.protocol !== "http:") continue;
+    if (domaineDe(u.href) !== hote) continue;
+    const chemin = u.pathname;
+    if (chemin === "/" || chemin.length > 90) continue;
+    if (!PAGES_A_LIENS.test(chemin)) continue;
+    if (/\.(jpe?g|png|gif|webp|svg|pdf|zip|css|js|ico)$/i.test(chemin)) continue;
+    const propre = u.origin + chemin;
+    if (vues.has(propre)) continue;
+    vues.add(propre);
+    sortie.push(propre);
+  }
+  return sortie;
+}
+
 export const PAGES_PAR_TOUR = 18;
 export const PLAFOND_CANDIDATS = 140;
 
@@ -174,6 +219,7 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
   let lus = 0;
   let murs = 0;
   let liens = 0;
+  let descendus = 0;
   const ecritures = [];
 
   for (const page of pages) {
@@ -240,6 +286,21 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
     } else {
       // La page s'est ouverte et ne porte aucun lien : c'est une MESURE, pas un echec.
       ecritures.push(bd.prepare("UPDATE candidats SET etat = 'vide' WHERE cible = ? AND url = ?").bind(cible, page.url));
+
+      // ...et on descend d'un cran, une seule fois, vers ses pages a liens.
+      if (!String(page.origine).endsWith("-p2")) {
+        for (const interne of pagesInternesProbables(res.html, hote)) {
+          ecritures.push(
+            bd
+              .prepare(
+                `INSERT INTO candidats (cible, url, origine, etat, ajoute_le)
+                 VALUES (?, ?, ?, 'attente', ?) ON CONFLICT(cible, url) DO NOTHING`
+              )
+              .bind(cible, interne, page.origine + "-p2", MAINTENANT())
+          );
+          descendus++;
+        }
+      }
     }
   }
 
@@ -269,5 +330,5 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
     await bd.prepare("UPDATE file_crawl SET fini_le = ? WHERE cible = ?").bind(MAINTENANT(), cible).run();
   }
 
-  return { fait: "verification", cible, pages_lues: lus, murs, liens, restants: restants?.n ?? 0 };
+  return { fait: "verification", cible, pages_lues: lus, murs, liens, descendus, restants: restants?.n ?? 0 };
 }

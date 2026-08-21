@@ -131,6 +131,18 @@ const A_ECARTER = [
   "gstatic.com", "googleapis.com", "cloudflare.com", "gravatar.com", "wp.com",
   "doubleclick.net", "googletagmanager.com", "google-analytics.com", "ip2location.com",
   "microsoft.com", "office.com", "live.com", "apple.com", "adobe.com",
+
+  // ⛔ LES GEANTS, ET POURQUOI ILS SORTENT DU JEU. Mesure du 21/08/2026 : la source
+  //    « reciproque » part des sites que la cible cite elle-meme, et tout site cite
+  //    YouTube, LinkedIn, Instagram. Le robot a donc depense onze pages de budget sur
+  //    youtube.com/about, linkedin.com/products et les pages institutionnelles d un
+  //    regulateur. Aucun de ces sites ne rendra jamais le lien : ils n ont pas de page
+  //    de liens sortants, et leur budget d ouverture est pris sur celui des petits
+  //    sites qui, eux, citent.
+  "youtube.com", "facebook.com", "twitter.com", "x.com", "linkedin.com", "instagram.com",
+  "tiktok.com", "pinterest.com", "reddit.com", "amazon.com", "wordpress.org", "mozilla.org",
+  "whatsapp.com", "telegram.org", "discord.com", "discord.gg", "t.me", "wa.me",
+  "europa.eu", "gouv.fr", "gov.uk", "who.int", "un.org",
 ];
 
 const ecarte = (d) => A_ECARTER.some((m) => d === m || d.endsWith("." + m));

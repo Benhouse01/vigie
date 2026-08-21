@@ -14,7 +14,12 @@ workers_dev = false
 # Toutes les deux minutes. Un tour ouvre au plus 18 pages, ce qui fait environ
 # 13 000 pages par jour, gratuitement, sans machine allumee nulle part.
 [triggers]
-crons = ["*/2 * * * *"]
+# ⛔ TOUTES LES MINUTES, ET PAS TOUTES LES DEUX. Un tour prend un bail de 90 secondes sur
+#    sa cible pour qu un second tour ne refasse pas son travail. Avec un reveil toutes les
+#    deux minutes, un reveil sur deux tombait DANS le bail et repartait sans rien faire :
+#    le robot n avancait qu une fois sur deux, et rien a l ecran ne le disait. A la minute,
+#    le premier reveil sorti du bail travaille toujours.
+crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "vigie"
