@@ -65,8 +65,42 @@ function pagesInternesProbables(html, hote, combien = 4) {
   return sortie;
 }
 
-export const PAGES_PAR_TOUR = 18;
+// ⛔ LE PLAFOND EST DE 50 SOUS-REQUETES PAR INVOCATION, ET UNE REQUETE D1 EN EST UNE.
+//    C est le piege le plus couteux de tout ce fichier, parce qu il est SILENCIEUX.
+//    Un tour de dix-huit pages consommait : dix-huit lectures de robots.txt en base,
+//    jusqu a dix-huit telechargements de robots.txt, dix-huit ouvertures de page, plus
+//    la demi-douzaine de requetes de gestion de la file. Soixante-dix a quatre-vingts.
+//    Le `bd.batch()` place APRES la boucle tombait donc systematiquement au-dela du
+//    plafond : toutes les ecritures du tour, liens compris, partaient a la poubelle.
+//    A l ecran, ca se lit « le robot a ouvert vingt-trois pages et trouve zero lien »,
+//    ce qui ressemble exactement a un site sans backlinks.
+//
+//    Deux remedes, et il faut les deux. D abord un budget assume : dix pages par tour,
+//    soit environ trente-cinq sous-requetes au pire. Ensuite l ecriture PAR PAQUETS AU
+//    FIL DE LA BOUCLE plutot qu une seule fois a la fin : si le plafond tombe malgre
+//    tout, on perd le dernier paquet, pas le tour entier.
+export const BUDGET_SOUS_REQUETES = 50;
+export const PAGES_PAR_TOUR = 10;
 export const PLAFOND_CANDIDATS = 140;
+
+/**
+ * Ecrit un paquet d enonces et VIDE le tableau, en place.
+ *
+ * ⛔ UN ECHEC D ECRITURE NE DOIT JAMAIS PASSER POUR UN RESULTAT VIDE. Si le paquet
+ *    ne passe pas, on le dit dans le compte rendu du tour : « n ecriture(s) perdue(s) »
+ *    est une information, « 0 lien trouve » serait un mensonge.
+ */
+async function viderEcritures(bd, ecritures) {
+  if (!ecritures.length) return 0;
+  const paquet = ecritures.splice(0, ecritures.length);
+  try {
+    await bd.batch(paquet);
+    return 0;
+  } catch (e) {
+    console.log("ecriture refusee :", e.message);
+    return paquet.length;
+  }
+}
 
 /** Met la cible en file, ou remonte sa priorite si elle y est deja. */
 export async function demanderCrawl(bd, cible, demandeur) {
@@ -219,6 +253,7 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
   let lus = 0;
   let murs = 0;
   let liens = 0;
+  let perdues = 0;
   let descendus = 0;
   let mentions = 0;
   const ecritures = [];
@@ -284,6 +319,9 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
         );
       }
       ecritures.push(bd.prepare("UPDATE candidats SET etat = 'lu' WHERE cible = ? AND url = ?").bind(cible, page.url));
+      // On vide des que le paquet est consequent : une ecriture differee jusqu a la fin
+      // du tour est une ecriture qu on perd entierement si le plafond tombe avant.
+      if (ecritures.length >= 25) perdues += await viderEcritures(bd, ecritures);
     } else {
       // ⛔ « AUCUN LIEN » ET « AUCUNE MENTION » NE SONT PAS LA MEME CHOSE.
       //    Une page peut nommer le domaine en toutes lettres sans qu aucune balise <a>
@@ -317,7 +355,8 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
     }
   }
 
-  if (ecritures.length) await bd.batch(ecritures);
+  // Le reste du paquet, s il en reste.
+  await viderEcritures(bd, ecritures);
 
   const restants = await bd
     .prepare("SELECT COUNT(*) AS n FROM candidats WHERE cible = ? AND etat = 'attente'")
@@ -343,5 +382,5 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
     await bd.prepare("UPDATE file_crawl SET fini_le = ? WHERE cible = ?").bind(MAINTENANT(), cible).run();
   }
 
-  return { fait: "verification", cible, pages_lues: lus, murs, liens, descendus, mentions, restants: restants?.n ?? 0 };
+  return { fait: "verification", cible, pages_lues: lus, murs, liens, descendus, mentions, perdues, restants: restants?.n ?? 0 };
 }

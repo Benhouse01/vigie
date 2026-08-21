@@ -49,9 +49,18 @@ export const DOSSIER = arg("dossier", process.env.VIGIE_GRAPHE || "C:/vigie/grap
 
 const BASE = `https://data.commoncrawl.org/projects/hyperlinkgraph/${CRAWL}/domain`;
 
+// ⛔ LES FICHIERS PORTENT LE NOM DE LEUR EDITION, ET C EST OBLIGATOIRE.
+//    Les editions se recouvrent et n ont pas la meme densite : mesure du 21/08/2026,
+//    « may-jun-jul » pese 9,78 Go d aretes quand « apr-may-jun » en pese 13,60 et
+//    « mar-apr-may » 15,41. Croiser deux editions trouve des domaines referents que
+//    l une seule rate. Avec un nom de fichier fixe, la seconde ecrase la premiere et
+//    on croit avoir change de source alors qu on a perdu la precedente.
+const nomLocal = (quoi) => path.join(DOSSIER, `${CRAWL}-${quoi}.txt.gz`);
+
 export const FICHIERS = {
-  sommets: { url: `${BASE}/${CRAWL}-domain-vertices.txt.gz`, local: path.join(DOSSIER, "sommets.txt.gz") },
-  aretes: { url: `${BASE}/${CRAWL}-domain-edges.txt.gz`, local: path.join(DOSSIER, "aretes.txt.gz") },
+  sommets: { url: `${BASE}/${CRAWL}-domain-vertices.txt.gz`, local: nomLocal("sommets") },
+  aretes: { url: `${BASE}/${CRAWL}-domain-edges.txt.gz`, local: nomLocal("aretes") },
+  rangs: { url: `${BASE}/${CRAWL}-domain-ranks.txt.gz`, local: nomLocal("rangs") },
 };
 
 const go = (o) => (o / 1024 / 1024 / 1024).toFixed(2) + " Go";

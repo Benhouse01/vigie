@@ -31,7 +31,7 @@ import zlib from "node:zlib";
 import { pipeline } from "node:stream/promises";
 import { DOSSIER, FICHIERS } from "./graphe-telecharger.mjs";
 
-export const SOMMETS_TXT = path.join(DOSSIER, "sommets.txt");
+export const SOMMETS_TXT = FICHIERS.sommets.local.replace(/.gz$/, "");
 
 const go = (o) => (o / 1024 / 1024 / 1024).toFixed(2) + " Go";
 
