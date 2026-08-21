@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ce que Vigie couvre, et ce qu'il ne couvre pas</title>
-<meta name="description" content="La capacité de crawl de Vigie, 5 millions de pages par jour, affichée à côté de celle d'Ahrefs et Semrush. Crawler coûte cher : les dons montent la capacité.">
+<title>À propos de Vigie</title>
+<meta name="description" content="Vigie est construit et financé par le fondateur de Tradoshi, qui met ses ressources de crawl à disposition de tous. Outil SEO gratuit, code libre en AGPL-3.0.">
 <style>
 :root{
   color-scheme: light;
@@ -142,141 +142,56 @@ footer a{color:var(--texte2)}
 </div></div>
 
 <header><div class="env">
-  <h1>Ce que Vigie couvre.<br><span class="sur">Et ce qu'il ne couvre pas.</span></h1>
-  <p class="chapeau">Vous méritez de savoir jusqu'où va la couverture avant de vous en
-  servir. Voici la capacité de crawl de notre moteur, affichée à côté de celle des outils
-  payants, avec leurs propres chiffres et leurs sources. Le rapport n'est pas flatteur,
-  et c'est justement pour ça qu'il est écrit ici.</p>
-
-  <div class="phare">
-    <div class="n">5 millions</div>
-    <div class="u">pages par jour, la capacité de crawl actuelle de l'outil</div>
-    <div class="s">Face à des mastodontes payants qui en font des milliards. Le détail du
-    rapport est plus bas, avec leurs propres chiffres et leurs sources.</div>
-  </div>
-
-  <div class="don-capacite">
-    <h3>Crawler coûte cher, et c'est là que va votre don</h3>
-    <p>Crawler des milliards de pages par jour coûte cher : ce sont des milliers de machines
-    et autant de plages d'adresses. Nous en avons une. <strong>Pour monter notre capacité de
-    crawl, nous avons besoin de dons</strong>, et ils se convertissent directement en pages
-    lues : chaque serveur ajouté ajoute sa part au périmètre couvert et à la fréquence de
-    passage.</p>
-    <p style="margin-bottom:0"><a class="bouton" href="https://buy.stripe.com/cNi6oIepEgck8pF7q59R600"
-      target="_blank" rel="noopener">Faire un don</a>
-      <span class="mini">Aucun don n'ouvre de fonctionnalité. Il achète du crawl, pour tout le monde.</span></p>
-  </div>
-
-  <div class="direct" id="pouls"><span class="pouls"></span><span id="pouls-txt">en direct</span></div>
-  <div id="tuiles" class="tuiles"></div>
-  <p id="mesure" class="mesure"></p>
+  <h1>Un outil SEO <span class="sur">gratuit</span>,<br>financé par quelqu'un qui s'en sert.</h1>
+  <p class="chapeau">Vigie est construit et payé par le fondateur de
+  <a href="https://tradoshi.com/en" target="_blank" rel="noopener">Tradoshi</a>.
+  Les serveurs, l'index de liens et le temps de crawl existaient déjà pour surveiller son
+  propre référencement. Les ouvrir à tout le monde ne coûtait presque rien de plus.</p>
 </div></header>
 
-<section><div class="env">
-  <h2>Face aux outils payants</h2>
-  <p class="sous">Chaque chiffre vient de ce que l'éditeur publie lui-même sur son propre
-  crawl. Le nôtre est mesuré sur les dates réelles de lecture des pages, jamais sur une
-  capacité théorique.</p>
-  <div class="enveloppe"><table id="comparaison"><tbody><tr><td class="attente">Lecture…</td></tr></tbody></table></div>
+<div class="env">
 
-  <div class="encart"><strong>Pourquoi l'écart est structurel.</strong> Dix milliards de pages
-  par jour, ce sont environ 115 000 pages par seconde, et à cinquante kilo-octets la page,
-  près de 500 téraoctets aspirés chaque jour. Ça ne s'obtient pas en allant plus vite sur
-  chaque site : la politesse impose une requête à la fois par hôte. Ça s'obtient en crawlant
-  des <strong>centaines de milliers d'hôtes différents en même temps</strong>, sur des milliers
-  de machines et autant de plages d'adresses. C'est un centre de données, pas un réglage.</div>
-</div></section>
+<h2>Pourquoi c'est gratuit</h2>
+<p>Un outil SEO correct coûte entre 100 et 250 € par mois. À ce prix, il est hors de portée
+de la personne qui en aurait le plus besoin : celle qui lance quelque chose, seule, sans
+budget, et qui ne sait pas encore si son site est vu.</p>
+<p>Les moyens techniques de Vigie, un index de liens et une capacité de crawl, servaient
+déjà à surveiller un site. Une machine qui explore le web pour un domaine peut en explorer
+mille pour à peu près le même prix. Le partage n'est donc pas de la générosité, c'est
+simplement ce que la structure des coûts permet.</p>
 
-<section><div class="env">
-  <h2>Ils font le tour du monde, nous faisons le tour de votre rue</h2>
-  <p class="sous">C'est toute la différence, et elle joue en votre faveur plus souvent
-  qu'on ne croit.</p>
+<h2>Ce que ça change sur les chiffres</h2>
+<p>Vigie ne cherche pas à être exhaustif, il cherche à ne jamais mentir sur ce qu'il sait.
+Une seule règle en découle, et c'est la seule qui ne se négocie pas :</p>
+<blockquote><strong>Jamais un zéro là où la mesure a échoué.</strong></blockquote>
+<p>Un site qui refuse notre robot n'a pas « zéro backlink », il a un mur. Une source qui
+plafonne à 500 résultats n'annonce pas un total, elle annonce un plancher. Un chiffre
+recopié d'ailleurs porte sa date d'origine, pas celle du jour où on l'a lu. Ces distinctions
+paraissent tatillonnes jusqu'au jour où une décision se prend dessus.</p>
 
-  <p>Un outil payant crawle le web entier, pour tous ses clients à la fois. Comme il a des
-  milliards de pages à couvrir, <strong>il ne repasse chez vous que rarement</strong> :
-  quelques semaines entre deux visites sur un site qui n'est pas connu. Un lien que vous
-  venez d'obtenir peut mettre un mois à apparaître dans leur outil. Un lien que vous avez
-  perdu peut y rester affiché aussi longtemps.</p>
+<h2>Le code est ouvert, et vérifiable</h2>
+<p>Tout est publié sous licence <strong>AGPL-3.0</strong> :
+<a href="https://github.com/Benhouse01/vigie" target="_blank" rel="noopener">github.com/Benhouse01/vigie</a>.
+L'AGPL est un choix, pas un défaut : elle oblige quiconque en fait un service en ligne à
+publier ses modifications. Un outil dont la promesse est l'honnêteté des mesures doit
+pouvoir être relu.</p>
 
-  <p>Ce moteur, lui, ne s'occupe que de <strong>votre monde</strong> : votre site, vos
-  concurrents, et les quelques milliers de sites qui parlent d'eux. C'est un périmètre mille
-  fois plus petit, donc on en fait le tour en moins d'une journée. Ensuite on recommence, et
-  on recommence encore. <strong>Plusieurs passages par jour au lieu d'un par mois</strong>,
-  <a href="#jusqu-ou">tant que la capacité suit le nombre de secteurs suivis</a>.</p>
+<h2>Le modèle, dit franchement</h2>
+<p>Il n'y a pas d'abonnement, pas de palier payant, pas de fonction réservée. Il y a un
+<a href="/#soutenir">lien de don</a>, libre, et il sert à une chose précise : chaque euro
+augmente la capacité de crawl, donc la fraîcheur des données pour tout le monde.
+<a href="/capacite.html">La page capacité</a> montre ce que l'outil couvre aujourd'hui et
+ce qu'il ne couvre pas.</p>
+<p>Le compte gratuit sert à savoir qui utilise l'outil et à empêcher qu'un robot le sature.
+Rien n'est revendu.</p>
 
-  <div class="encart bon"><strong>Concrètement, pour vous.</strong> Vous obtenez un lien
-  aujourd'hui, il apparaît ici dans la journée. Un partenaire retire son lien sans vous
-  prévenir, vous le voyez tout de suite au lieu de le découvrir des semaines plus tard.
-  C'est le seul terrain où un outil gratuit bat un abonnement : pas la taille de l'index,
-  la <strong>fraîcheur sur ce qui vous concerne</strong>.</div>
+<h2>Qui écrit ceci</h2>
+<p>Benjamin Roure-Lhermitte, fondateur de Tradoshi, un journal de trading. Vigie est né
+d'un besoin personnel : savoir quels sites parlaient du produit, lesquels avaient cessé, et
+pourquoi les outils du marché donnaient trois réponses différentes à la même question.
+Il n'y a pas d'équipe derrière, et c'est aussi pour ça que le code est ouvert.</p>
 
-  <h3 id="jusqu-ou" style="margin-top:34px;font-size:19px;letter-spacing:-.3px">Jusqu'où
-  cette promesse tient, et à partir de quand elle casse</h3>
-  <p>Elle ne tient pas indéfiniment, et le dire vaut mieux que le découvrir. Le périmètre
-  d'un secteur entier, mesuré ici sur une dizaine de concurrents et les quelques milliers de
-  sites qui les citent, fait <strong>890 000 pages</strong>. Le calcul est donc simple :</p>
-
-  <div class="enveloppe" style="margin:16px 0"><table>
-    <thead><tr><th>Secteurs suivis</th><th style="text-align:right">Pages à couvrir</th>
-      <th style="text-align:right">Passages par jour</th></tr></thead>
-    <tbody>
-      <tr class="nous"><td><b>1 secteur</b></td><td class="num">890 000</td><td class="num"><b>5,6 par jour</b></td></tr>
-      <tr><td>5 secteurs</td><td class="num">4,5 millions</td><td class="num">1,1 par jour</td></tr>
-      <tr><td>10 secteurs</td><td class="num">8,9 millions</td><td class="num">un tous les 2 jours</td></tr>
-      <tr><td>50 secteurs</td><td class="num">44 millions</td><td class="num">un tous les 9 jours</td></tr>
-      <tr><td>100 secteurs</td><td class="num">89 millions</td><td class="num">un tous les 18 jours</td></tr>
-    </tbody>
-  </table></div>
-
-  <p>Deux choses à en retenir. D'abord, ce qui compte n'est pas le nombre d'utilisateurs
-  mais le nombre de <strong>secteurs différents</strong> : mille utilisateurs du même métier
-  partagent le même périmètre et ne coûtent rien de plus qu'un seul. Ensuite, au-delà d'une
-  cinquantaine de secteurs, la fréquence retombe à celle d'un index mondial et l'avantage
-  disparaît.</p>
-
-  <div class="encart"><strong>C'est exactement pour ça qu'il y a un bouton de don, et
-  pas un abonnement.</strong> Chaque serveur ajouté, c'est environ deux millions et demi de
-  pages par jour de plus, donc trois secteurs de plus tenus à un passage quotidien. La
-  capacité doit grandir en même temps que le nombre de secteurs suivis, sinon la promesse
-  du dessus devient fausse. <a href="https://buy.stripe.com/cNi6oIepEgck8pF7q59R600"
-  target="_blank" rel="noopener">Faire un don</a>.</div>
-
-  <h3 style="margin-top:34px;font-size:19px;letter-spacing:-.3px">Et la zone surveillée
-  grandit avec les utilisateurs</h3>
-  <p>Quand quelqu'un analyse un domaine, ce domaine et son voisinage entrent dans la zone
-  que le robot surveille. <strong>Ils y restent, pour tout le monde.</strong> Le suivant qui
-  cherche un site du même secteur trouve donc plus que le précédent, sans rien avoir à faire.</p>
-  <p>C'est l'inverse d'un abonnement, où chaque client paie pour accéder aux mêmes données
-  fermées. Ici chaque utilisateur agrandit le terrain commun. Ça ne comblera jamais tout
-  l'écart avec un crawl à dix milliards de pages par jour, mais ça le réduit un peu chaque
-  jour, et sans que personne paie.</p>
-</div></section>
-
-<section><div class="env">
-  <h2>Ce qui tourne, et sur quoi</h2>
-  <p class="sous">Aucun secret d'infrastructure : tout le code est libre, et voici la machine.</p>
-  <div class="enveloppe"><table>
-    <thead><tr><th>Brique</th><th>Où</th><th>Ce qu'elle fait</th></tr></thead>
-    <tbody>
-      <tr><td><b>Le graphe du web</b></td><td>un serveur loué au mois</td>
-        <td>Le graphe hyperliens de Common Crawl, refait chaque trimestre. Donne la liste
-        nommée des domaines référents de n'importe quel site. Profond, mais jamais frais.</td></tr>
-      <tr><td><b>Le robot</b></td><td>le même serveur, deux processus</td>
-        <td>Ouvre les pages et lit les liens dans le HTML servi. L'un ne fait que le périmètre
-        suivi, l'autre élargit. C'est lui qui apporte la fraîcheur.</td></tr>
-      <tr><td><b>Le service</b></td><td>Cloudflare, palier gratuit</td>
-        <td>La page que vous lisez, l'analyse en direct, et la base partagée. Aucun port ouvert
-        sur le serveur : c'est lui qui appelle, jamais l'inverse.</td></tr>
-    </tbody>
-  </table></div>
-
-  <div class="encart"><strong>La politesse n'est pas négociable.</strong> Le robot lit le
-  <code>robots.txt</code> de chaque hôte avant de l'ouvrir et le respecte. Une seule requête en
-  vol par hôte, avec un délai entre deux. Un User-Agent qui s'annonce et donne un moyen de nous
-  joindre. Ce n'est pas de la courtoisie : un robot impoli fait bannir son adresse et grille les
-  sites qu'on voulait justement convaincre de nous publier.</div>
-</div></section>
-
+</div>
 <footer><div class="env">
   <p><strong>Vigie</strong> — logiciel libre sous licence AGPL-3.0.
   <a href="https://github.com/Benhouse01/vigie" target="_blank" rel="noopener">le code</a></p>
