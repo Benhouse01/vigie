@@ -85,11 +85,41 @@ function mesurer() {
   };
 }
 
+/*
+ * ⛔ LA VITESSE DE CHAQUE COMPTEUR EST PUBLIEE PAR LE SERVEUR, PAS DEDUITE PAR LA PAGE.
+ *    Premiere version : la page comparait deux releves pour en tirer une vitesse. Elle
+ *    devait donc attendre DEUX mesures distinctes, soit deux minutes, avant de faire
+ *    bouger quoi que ce soit. Entre-temps un seul compteur avancait, celui dont la
+ *    cadence etait publiee, et les cinq autres restaient figes : a l ecran, ca se lit
+ *    « les compteurs sont casses ».
+ *    Le serveur, lui, connait exactement l ecart entre sa mesure precedente et celle-ci.
+ *    Il publie donc la vitesse de chaque compteur, et la page n a plus rien a deviner :
+ *    tout bouge des la premiere seconde de lecture.
+ */
+let mesurePrecedente = null;
+let heurePrecedente = 0;
+
 async function publier() {
   const m = mesurer();
   const maintenant = new Date().toISOString();
 
-  for (const [cle, valeur] of Object.entries(m)) {
+  // Les vitesses, en unites par seconde, constatees depuis la publication precedente.
+  const vitesses = {};
+  if (mesurePrecedente) {
+    const secondes = (Date.now() - heurePrecedente) / 1000;
+    if (secondes > 5 && secondes < 3600) {
+      for (const [cle, valeur] of Object.entries(m)) {
+        const avant = mesurePrecedente[cle];
+        if (typeof avant === "number" && typeof valeur === "number") {
+          vitesses["vitesse_" + cle] = (valeur - avant) / secondes;
+        }
+      }
+    }
+  }
+  mesurePrecedente = m;
+  heurePrecedente = Date.now();
+
+  for (const [cle, valeur] of Object.entries({ ...m, ...vitesses })) {
     await sql(
       `INSERT INTO metriques (cle, valeur, maj_le) VALUES (?, ?, ?)
        ON CONFLICT(cle) DO UPDATE SET valeur = excluded.valeur, maj_le = excluded.maj_le`,

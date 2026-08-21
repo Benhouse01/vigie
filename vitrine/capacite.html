@@ -200,13 +200,45 @@ footer a{color:var(--texte2)}
   <p>Ce moteur, lui, ne s'occupe que de <strong>votre monde</strong> : votre site, vos
   concurrents, et les quelques milliers de sites qui parlent d'eux. C'est un périmètre mille
   fois plus petit, donc on en fait le tour en moins d'une journée. Ensuite on recommence, et
-  on recommence encore. <strong>Plusieurs passages par jour au lieu d'un par mois.</strong></p>
+  on recommence encore. <strong>Plusieurs passages par jour au lieu d'un par mois</strong>,
+  <a href="#jusqu-ou">tant que la capacité suit le nombre de secteurs suivis</a>.</p>
 
   <div class="encart bon"><strong>Concrètement, pour vous.</strong> Vous obtenez un lien
   aujourd'hui, il apparaît ici dans la journée. Un partenaire retire son lien sans vous
   prévenir, vous le voyez tout de suite au lieu de le découvrir des semaines plus tard.
   C'est le seul terrain où un outil gratuit bat un abonnement : pas la taille de l'index,
   la <strong>fraîcheur sur ce qui vous concerne</strong>.</div>
+
+  <h3 id="jusqu-ou" style="margin-top:34px;font-size:19px;letter-spacing:-.3px">Jusqu'où
+  cette promesse tient, et à partir de quand elle casse</h3>
+  <p>Elle ne tient pas indéfiniment, et le dire vaut mieux que le découvrir. Le périmètre
+  d'un secteur entier, mesuré ici sur une dizaine de concurrents et les quelques milliers de
+  sites qui les citent, fait <strong>890 000 pages</strong>. Le calcul est donc simple :</p>
+
+  <div class="enveloppe" style="margin:16px 0"><table>
+    <thead><tr><th>Secteurs suivis</th><th style="text-align:right">Pages à couvrir</th>
+      <th style="text-align:right">Passages par jour</th></tr></thead>
+    <tbody>
+      <tr class="nous"><td><b>1 secteur</b></td><td class="num">890 000</td><td class="num"><b>5,6 par jour</b></td></tr>
+      <tr><td>5 secteurs</td><td class="num">4,5 millions</td><td class="num">1,1 par jour</td></tr>
+      <tr><td>10 secteurs</td><td class="num">8,9 millions</td><td class="num">un tous les 2 jours</td></tr>
+      <tr><td>50 secteurs</td><td class="num">44 millions</td><td class="num">un tous les 9 jours</td></tr>
+      <tr><td>100 secteurs</td><td class="num">89 millions</td><td class="num">un tous les 18 jours</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Deux choses à en retenir. D'abord, ce qui compte n'est pas le nombre d'utilisateurs
+  mais le nombre de <strong>secteurs différents</strong> : mille utilisateurs du même métier
+  partagent le même périmètre et ne coûtent rien de plus qu'un seul. Ensuite, au-delà d'une
+  cinquantaine de secteurs, la fréquence retombe à celle d'un index mondial et l'avantage
+  disparaît.</p>
+
+  <div class="encart"><strong>C'est exactement pour ça qu'il y a un bouton de don, et
+  pas un abonnement.</strong> Chaque serveur ajouté, c'est environ deux millions et demi de
+  pages par jour de plus, donc trois secteurs de plus tenus à un passage quotidien. La
+  capacité doit grandir en même temps que le nombre de secteurs suivis, sinon la promesse
+  du dessus devient fausse. <a href="https://buy.stripe.com/cNi6oIepEgck8pF7q59R600"
+  target="_blank" rel="noopener">Faire un don</a>.</div>
 
   <h3 style="margin-top:34px;font-size:19px;letter-spacing:-.3px">Et la zone surveillée
   grandit avec les utilisateurs</h3>
@@ -373,6 +405,7 @@ function relever(){
     .then(function(d){
       var m = d.moteur || {};
       var s = d.service || {};
+      var v = d.vitesses || {};
       var neuf = {
         liens_indexes: m.liens_indexes,
         domaines_cibles: m.domaines_cibles,
@@ -381,39 +414,24 @@ function relever(){
         liens_confirmes: s.liens_confirmes,
         pages_en_file: m.pages_en_file,
       };
-      var maintenant = Date.now();
-      var nouvelleMesure = d.mesure_le !== etat.mesurePrecedente;
 
-      if (nouvelleMesure){
-        if (etat.reel && etat.mesurePrecedente){
-          // Le temps ecoule COTE SERVEUR entre les deux mesures, pas le temps entre nos
-          // deux relevés : c est lui qui a produit l ecart qu on mesure.
-          var ecoule = Date.parse(d.mesure_le) - Date.parse(etat.mesurePrecedente);
-          if (ecoule > 1000 && ecoule < 3600000){
-            CLES.forEach(function(c){
-              var cle = c[0];
-              var a = etat.reel[cle], b = neuf[cle];
-              if (typeof a === 'number' && typeof b === 'number'){
-                var brute = (b - a) / ecoule;
-                var avant = etat.vitesse[cle];
-                // Un lissage leger, pour qu une minute creuse ne fasse pas caler le
-                // compteur et qu une minute chargee ne le fasse pas s emballer.
-                etat.vitesse[cle] = (avant === undefined) ? brute : avant * 0.5 + brute * 0.5;
-              }
-            });
-          }
-        } else if (m.cadence_pages_par_seconde){
-          // Premiere mesure : on ne connait qu une vitesse, celle des pages, publiee
-          // par le serveur. Les autres restent a zero jusqu a la mesure suivante,
-          // plutot que d etre devinees.
-          etat.vitesse.pages_depuis_le_debut = m.cadence_pages_par_seconde / 1000;
-        }
-
+      /* ⛔ LA VITESSE VIENT DU SERVEUR, LA PAGE NE LA DEVINE PLUS.
+         Deduire une vitesse en comparant deux relevés obligeait a attendre deux mesures
+         distinctes, soit deux minutes, avant que quoi que ce soit bouge. Le serveur,
+         lui, connait l ecart exact entre sa mesure precedente et celle-ci : il le publie,
+         et tout avance des la premiere seconde de lecture. `liens_confirmes` n a pas de
+         vitesse publiee (il vient d une autre table, poussee toutes les dix minutes) :
+         il reste donc fixe entre deux poussees, ce qui est exact. */
+      if (d.mesure_le !== etat.mesurePrecedente){
         etat.reel = neuf;
-        etat.quand = maintenant;
+        etat.quand = Date.now();
         etat.mesurePrecedente = d.mesure_le;
       }
-
+      CLES.forEach(function(c){
+        var val = v[c[0]];
+        if (typeof val === 'number' && isFinite(val)) etat.vitesse[c[0]] = val / 1000;
+      });
+      if (!etat.reel){ etat.reel = neuf; etat.quand = Date.now(); etat.mesurePrecedente = d.mesure_le; }
       etat.vivant = m.etat === 'MESURE';
 
       document.getElementById('mesure').textContent = etat.vivant
@@ -430,7 +448,6 @@ function relever(){
       dessinerCompteurs();
     });
 }
-
 function dessinerComparaison(d, m){
   var CAPACITE = 5000000;
   var lignes = (d.reperes || []).map(function(r){

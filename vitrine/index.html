@@ -628,13 +628,37 @@ function puceRel(rel){
    chiffre d'index l'apparence d'une mesure. C'est le reproche qu'on fait aux outils
    payants ; le faire ici serait devenir ce qu'on critique.
 */
+/*
+   ⛔ « OUVRIR » DOIT MENER A LA PAGE QUI PORTE LE LIEN, JAMAIS A L ACCUEIL DU SITE.
+      Premiere version : le bouton pointait sur https://domaine-referent/. L utilisateur
+      devait donc retrouver a la main, dans un site entier, la page qui le cite. C est
+      exactement le travail que l outil est cense faire a sa place, et sur un annuaire de
+      dix mille fiches c est introuvable.
+
+      Pour une ligne « lien lu », on connait l URL exacte : on la donne, et on montre
+      l ancre au survol. Pour une ligne « annonce par un index », on ne la connait PAS :
+      on le dit, et on n offre pas un lien vers l accueil qui ferait croire le contraire.
+      Un bouton qui promet une page et rend un accueil est pire que pas de bouton.
+*/
+function lienVersLaPage(d){
+  if (d.connu_par === 'lu' && d.url){
+    var titre = d.ancre ? 'ancre : ' + d.ancre : 'page qui porte le lien';
+    return '<a href="' + ech(d.url) + '" target="_blank" rel="noopener nofollow" ' +
+      'title="' + ech(titre) + '">voir la page ↗</a>';
+  }
+  return '<a href="https://' + ech(d.dom) + '" target="_blank" rel="noopener nofollow" ' +
+    'style="color:var(--doux)" title="La page exacte n’est pas encore connue : ce lien mène ' +
+    'au site, pas au lien.">voir le site ↗</a>';
+}
+
 function tableauDomaines(b){
   var confirmes = {};
   var rangs = (b.domaines || []).map(function(d){
     confirmes[d.domaine_src] = true;
     return {
       dom: d.domaine_src, liens: d.liens, suivis: d.suivis,
-      depuis: d.depuis, connu_par: 'lu'
+      depuis: d.depuis, connu_par: 'lu',
+      url: d.exemple_url, ancre: d.exemple_ancre
     };
   });
   (b.referents_annonces || []).forEach(function(r){
@@ -659,10 +683,10 @@ function tableauDomaines(b){
     return '<tr>' +
       '<td><span class="dom">' + ech(d.dom) + '</span></td>' +
       '<td>' + preuve + '</td>' +
-      '<td class="num">' + (d.nature === 'plancher' ? '≥ ' : '') + nb(d.liens) + '</td>' +
+      '<td class="num">' + (d.liens === null || d.liens === undefined ? '<span style="color:var(--doux)">non connu</span>' : (d.nature === 'plancher' ? '≥ ' : '') + nb(d.liens)) + '</td>' +
       '<td class="num">' + dofollow + '</td>' +
       '<td class="num" style="color:var(--doux)">' + ech(String(d.depuis || '').slice(0,10)) + '</td>' +
-      '<td><a href="https://' + ech(d.dom) + '" target="_blank" rel="noopener nofollow">ouvrir ↗</a></td>' +
+      '<td>' + lienVersLaPage(d) + '</td>' +
     '</tr>';
   }).join('');
 

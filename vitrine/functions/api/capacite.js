@@ -43,9 +43,16 @@ export async function onRequestGet({ env }) {
   ]);
 
   const m = {};
+  const vitesses = {};
   let mesureLe = null;
   for (const l of metriques.results || []) {
     const n = Number(l.valeur);
+    if (l.cle.startsWith("vitesse_")) {
+      // Les vitesses vivent a part : elles servent a animer, jamais a mesurer.
+      vitesses[l.cle.slice(8)] = Number.isFinite(n) ? n : 0;
+      if (!mesureLe || l.maj_le > mesureLe) mesureLe = l.maj_le;
+      continue;
+    }
     m[l.cle] = Number.isFinite(n) ? n : l.valeur;
     if (!mesureLe || l.maj_le > mesureLe) mesureLe = l.maj_le;
   }
@@ -79,6 +86,11 @@ export async function onRequestGet({ env }) {
         : Date.parse(mesureLe) < Date.now() - 7200000 ? "ANGLE_MORT"
         : "MESURE",
     },
+
+    // ⛔ EN UNITES PAR SECONDE, ET SEULEMENT POUR ANIMER. Ce que la page affiche entre
+    //    deux mesures est une projection ; elle se recale sur la valeur reelle a chaque
+    //    nouvelle mesure du serveur.
+    vitesses,
 
     // Ce que l'application sert aujourd'hui.
     service: {

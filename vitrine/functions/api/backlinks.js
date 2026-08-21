@@ -42,10 +42,23 @@ export async function onRequestGet({ request, env }) {
          FROM backlinks ${ou} ORDER BY domaine_src ASC, url_src ASC LIMIT ? OFFSET ?`
     ).bind(...params, PAR_PAGE, page * PAR_PAGE).all(),
     bd.prepare(`SELECT COUNT(*) AS n FROM backlinks ${ou}`).bind(...params).first(),
+    // ⛔ ON REND AUSSI L URL EXACTE D UNE PAGE QUI PORTE LE LIEN, et pas seulement le nom
+    //    du domaine. Sans elle, le bouton « ouvrir » de l ecran menait a l accueil du site
+    //    referent : l utilisateur devait retrouver a la main, dans un site entier, la page
+    //    qui le cite. C est precisement le travail que l outil est cense faire.
+    //    On prend la plus RECEMMENT vue : c est celle dont on est le plus sur qu elle existe
+    //    encore.
     bd.prepare(
       `SELECT domaine_src, COUNT(*) AS liens, MIN(vu_le) AS depuis,
-              SUM(CASE WHEN rel = 'dofollow' THEN 1 ELSE 0 END) AS suivis
-         FROM backlinks WHERE cible = ? GROUP BY domaine_src ORDER BY liens DESC LIMIT 400`
+              SUM(CASE WHEN rel = 'dofollow' THEN 1 ELSE 0 END) AS suivis,
+              (SELECT b2.url_src FROM backlinks b2
+                WHERE b2.cible = b.cible AND b2.domaine_src = b.domaine_src
+                ORDER BY b2.vu_le DESC LIMIT 1) AS exemple_url,
+              (SELECT b3.ancre FROM backlinks b3
+                WHERE b3.cible = b.cible AND b3.domaine_src = b.domaine_src
+                  AND b3.ancre IS NOT NULL AND b3.ancre != ''
+                ORDER BY b3.vu_le DESC LIMIT 1) AS exemple_ancre
+         FROM backlinks b WHERE b.cible = ? GROUP BY b.domaine_src ORDER BY liens DESC LIMIT 400`
     ).bind(cible).all(),
     bd.prepare(
       `SELECT rel, COUNT(*) AS n FROM backlinks WHERE cible = ? GROUP BY rel`
