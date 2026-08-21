@@ -365,15 +365,62 @@ function m(nom, val, sous){
     (sous ? '<div class="sous">' + sous + '</div>' : '') + '</div>';
 }
 
+/*
+  ⛔ UNE MESURE DE L'API PORTE SON ETAT, ET L'ECRAN DOIT LE RESPECTER.
+     Chaque champ de `resultats` est un objet { etat, valeur, preuve, source } avec trois
+     etats possibles :
+       MESURE         la valeur est reelle
+       MESURE_ABSENT  la source a repondu « rien », c'est une vraie mesure de faiblesse
+       ANGLE_MORT     403, captcha, delai : AUCUNE valeur, et surtout pas zero
+     Afficher 0 sur un angle mort est le seul mensonge que cet outil ne se permet pas.
+     Le triangle porte le motif en bulle, pour qu'on sache quoi corriger.
+*/
+function champ(o, sous){
+  if (!o) return { html:'—', classe:' pale', titre:'jamais mesuré' };
+  if (o.etat === 'ANGLE_MORT') return { html:'▲', classe:' pale', titre:(o.preuve||'mesure impossible') };
+  if (o.etat === 'MESURE_ABSENT') return { html:'0', classe:'', titre:(o.preuve||'la source a répondu, sans résultat') };
+  return { html: (typeof o.valeur === 'number' ? nb(o.valeur) : ech(o.valeur)), classe:'', titre:(o.preuve||'') };
+}
+
+function mm(nom, o, sous){
+  var c = champ(o);
+  return '<div class="mesure" title="' + ech(c.titre) + '"><div class="nom">' + ech(nom) + '</div>' +
+    '<div class="val' + c.classe + '">' + c.html + '</div>' +
+    '<div class="sous">' + ech(sous || (o && o.source) || '') + '</div></div>';
+}
+
 function blocSante(){
-  if (!D || D.erreur) return '';
-  var s = D.sante || D.technique || {};
-  var pop = D.popularite || {};
+  if (!D || D.erreur || !D.resultats) return '';
+  var r = D.resultats;
   return '<div class="bloc"><span class="etiq">Le site</span><div class="mesures">' +
-    m('Pages au sitemap', s.urls_sitemap !== undefined ? s.urls_sitemap : (D.sitemap && D.sitemap.urls),
-      'déclarées par le site') +
-    m('Rang de popularité', pop.tranco || pop.rang || null, 'panel public, 1 M de domaines') +
+    mm('Santé technique', r.sante_technique, 'sur 100, sondes HTTP') +
+    mm('Pages au sitemap', r.pages_au_sitemap, 'déclarées par le site') +
+    mm('Rang de popularité', r.popularite_tranco, 'panel public, 1 M de domaines') +
+    mm('Poids de l\'accueil', r.poids_accueil, 'octets servis') +
     '</div></div>';
+}
+
+/* Les mesures qui ne sont pas des nombres : indexable, robots.txt. Elles meritent une
+   phrase, pas un chiffre. */
+function blocEtat(){
+  if (!D || D.erreur || !D.resultats) return '';
+  var r = D.resultats;
+  var ligne = function(nom, o){
+    if (!o) return '';
+    var t = o.etat === 'ANGLE_MORT' ? '<span class="pastille annonce">non mesuré</span>'
+          : '<span class="pastille lu">mesuré</span>';
+    return '<tr><td>' + ech(nom) + '</td><td>' + t + '</td><td class="doux">' + ech(o.preuve||'') + '</td></tr>';
+  };
+  var non = (D.non_mesure_ici || []).map(function(x){
+    return '<li>' + ech(x) + '</li>'; }).join('');
+  return '<h2>Ce que la sonde a vu</h2><div class="tableau"><table><tbody>' +
+    ligne('Réponse HTTP', r.reponse_http) +
+    ligne('Indexable', r.indexable) +
+    ligne('robots.txt', r.robots_bloque_tout) +
+    ligne('Liens sortants de l\'accueil', r.liens_externes_accueil) +
+    '</tbody></table></div>' +
+    (non ? '<div class="avert calme"><strong>Ce que cette page ne mesure pas, et pourquoi.</strong>' +
+      '<ul style="margin:8px 0 0;padding-left:20px">' + non + '</ul></div>' : '');
 }
 
 function vueApercu(){
@@ -392,6 +439,7 @@ function vueApercu(){
   if (dom.length){
     h += '<h2>Les domaines qui pointent le plus</h2>' + tableauDomaines(dom.slice(0, 25));
   }
+  h += blocEtat();
   return h;
 }
 
