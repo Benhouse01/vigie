@@ -77,15 +77,22 @@ bd.exec("PRAGMA temp_store = MEMORY");
 bd.exec("PRAGMA cache_size = -200000");
 
 bd.exec(`
+-- ⛔ « priorite » N EST PAS UN CONFORT, C EST CE QUI REND LE ROBOT UTILE.
+--    Sans elle, la file melange les 36 891 domaines referents d un geant du secteur et
+--    les 508 d un concurrent direct : le robot passe ses journees sur des sites de
+--    finance generalistes qui ne citeront jamais un petit outil. Les domaines qui
+--    citent VOS concurrents directs passent devant, parce que ce sont eux qui peuvent
+--    vous citer. 1 = a lire d abord, 5 = quand il n y a plus rien d autre.
 CREATE TABLE IF NOT EXISTS file (
   url        TEXT PRIMARY KEY,
   hote       TEXT NOT NULL,
   profondeur INTEGER NOT NULL DEFAULT 0,
+  priorite   INTEGER NOT NULL DEFAULT 3,
   etat       TEXT NOT NULL DEFAULT 'attente',   -- attente | lu | mur | interdit
   ajoute_le  TEXT NOT NULL,
   lu_le      TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_file_travail ON file(etat, profondeur);
+CREATE INDEX IF NOT EXISTS idx_file_travail ON file(etat, priorite, profondeur);
 CREATE INDEX IF NOT EXISTS idx_file_hote ON file(hote, etat);
 
 CREATE TABLE IF NOT EXISTS hotes (
@@ -114,6 +121,11 @@ CREATE TABLE IF NOT EXISTS liens (
 CREATE INDEX IF NOT EXISTS idx_liens_dest ON liens(domaine_dest, vu_le);
 CREATE INDEX IF NOT EXISTS idx_liens_src ON liens(domaine_src);
 `);
+
+// La colonne peut manquer sur une base creee avant cette version : on l ajoute sans
+// rien casser, et on ignore l erreur si elle est deja la.
+try { bd.exec("ALTER TABLE file ADD COLUMN priorite INTEGER NOT NULL DEFAULT 3"); } catch { /* deja presente */ }
+try { bd.exec("CREATE INDEX IF NOT EXISTS idx_file_travail2 ON file(etat, priorite, profondeur)"); } catch { /* deja presente */ }
 
 /* -------------------------------------------------------------- utilitaires */
 
@@ -247,7 +259,12 @@ function autorise(regles, chemin) {
 /* ------------------------------------------------------------- la file */
 
 const ajouter = bd.prepare(
-  "INSERT INTO file (url, hote, profondeur, etat, ajoute_le) VALUES (?, ?, ?, 'attente', ?) ON CONFLICT(url) DO NOTHING"
+  "INSERT INTO file (url, hote, profondeur, priorite, etat, ajoute_le) VALUES (?, ?, ?, ?, 'attente', ?) ON CONFLICT(url) DO NOTHING"
+);
+// Une page deja en file qui revient avec une meilleure priorite doit remonter : c est
+// ce qui fait qu ajouter une cible prioritaire reordonne le travail restant.
+const remonter = bd.prepare(
+  "UPDATE file SET priorite = ? WHERE url = ? AND etat = 'attente' AND priorite > ?"
 );
 const marquer = bd.prepare("UPDATE file SET etat = ?, lu_le = ? WHERE url = ?");
 const noterLien = bd.prepare(
@@ -256,11 +273,12 @@ const noterLien = bd.prepare(
    ON CONFLICT(url_src, url_dest) DO UPDATE SET rel = excluded.rel, ancre = excluded.ancre, vu_le = excluded.vu_le`
 );
 
-function enfiler(url, profondeur) {
+function enfiler(url, profondeur, priorite = 3) {
   const hote = domaineDe(url);
   if (!hote) return false;
-  if (EXTENSIONS_MORTES.test(new URL(url).pathname)) return false;
-  ajouter.run(url, hote, profondeur, new Date().toISOString());
+  try { if (EXTENSIONS_MORTES.test(new URL(url).pathname)) return false; } catch { return false; }
+  ajouter.run(url, hote, profondeur, priorite, new Date().toISOString());
+  remonter.run(priorite, url, priorite);
   return true;
 }
 
@@ -329,7 +347,7 @@ async function ouvrir(url) {
 }
 /** Une page : on l'ouvre, on note TOUS ses liens sortants, on enfile ses liens internes. */
 async function traiter(ligne) {
-  const { url, hote, profondeur } = ligne;
+  const { url, hote, profondeur, priorite } = ligne;
 
   const regles = await reglesDe(hote);
   let chemin = "/";
@@ -366,7 +384,11 @@ async function traiter(ligne) {
 
   // Quelques liens internes seulement : le but est de couvrir BEAUCOUP de sites, pas
   // d'aspirer un site entier.
-  for (const u of internes.slice(0, 25)) enfiler(u, profondeur + 1);
+  // ⛔ ON DESCEND PLUS LOIN SUR LES SITES PRIORITAIRES, et a peine sur les autres.
+  //    Un annuaire du secteur porte ses liens sur des pages profondes ; un site
+  //    generaliste n en portera aucun quel que soit le nombre de pages lues.
+  const combien = (priorite || 3) <= 2 ? 60 : 12;
+  for (const u of internes.slice(0, combien)) enfiler(u, profondeur + 1, priorite || 3);
 
   marquer.run("lu", maintenant, url);
   bd.prepare("UPDATE hotes SET pages_lues = pages_lues + 1, dernier_le = ? WHERE hote = ?").run(maintenant, hote);
@@ -381,9 +403,9 @@ function prochaine() {
   const exclus = [...occupes];
   const trous = exclus.map(() => "?").join(",");
   const sql =
-    "SELECT url, hote, profondeur FROM file WHERE etat = 'attente'" +
+    "SELECT url, hote, profondeur, priorite FROM file WHERE etat = 'attente'" +
     (exclus.length ? ` AND hote NOT IN (${trous})` : "") +
-    " ORDER BY profondeur ASC, rowid ASC LIMIT 1";
+    " ORDER BY priorite ASC, profondeur ASC, rowid ASC LIMIT 1";
   return bd.prepare(sql).get(...exclus);
 }
 
@@ -422,29 +444,59 @@ async function semer() {
       method: "POST",
       headers: { authorization: `Bearer ${JETON}`, "content-type": "application/json" },
       body: JSON.stringify({
-        sql: "SELECT DISTINCT domaine_src FROM referents UNION SELECT DISTINCT domaine_src FROM backlinks",
+        sql:
+          "SELECT domaine_src, cible FROM referents " +
+          "UNION SELECT domaine_src, cible FROM backlinks",
       }),
     }
   );
   const d = await r.json();
   if (!d.success) { console.error("lecture D1 en echec :", JSON.stringify(d.errors).slice(0, 200)); process.exit(1); }
 
-  const voisins = (d.result?.[0]?.results || []).map((l) => l.domaine_src).filter(Boolean);
-  dire(`${voisins.length} domaine(s) voisin(s) a semer`);
+  // ⛔ L ORDRE DE PASSAGE EST DICTE PAR LA CIBLE D OU VIENT LE VOISIN.
+  //    Les domaines qui citent VOS concurrents directs sont ceux qui peuvent vous citer.
+  //    Ceux qui citent un geant du secteur sont, pour l essentiel, des sites de finance
+  //    generalistes qui ne citeront jamais un petit outil : ils passent en dernier.
+  const prioritaires = String(arg("prioritaires", "") || "")
+    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const massives = String(arg("massives", "tradingview.com,myfxbook.com"))
+    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+
+  const parVoisin = new Map();
+  for (const l of d.result?.[0]?.results || []) {
+    const v = l.domaine_src;
+    const c = String(l.cible || "").toLowerCase();
+    if (!v) continue;
+    let p = 3;
+    if (prioritaires.length && prioritaires.includes(c)) p = 1;
+    else if (massives.includes(c)) p = 5;
+    else p = 2;
+    parVoisin.set(v, Math.min(parVoisin.get(v) ?? 9, p));
+  }
+
+  const compte = { 1: 0, 2: 0, 3: 0, 5: 0 };
+  for (const p of parVoisin.values()) compte[p] = (compte[p] || 0) + 1;
+  dire(
+    `${parVoisin.size} domaine(s) voisin(s) a semer : ` +
+      `${compte[1] || 0} prioritaire(s), ${compte[2] || 0} de concurrents, ${compte[5] || 0} de sites massifs`
+  );
+
+  // Les chemins ou vivent les liens sortants, tentes directement : un annuaire ne met
+  // pas ses fiches sur son accueil, et aucun moteur ne les indexe.
+  const CHEMINS = [
+    "/blog", "/blog/", "/tools", "/outils", "/partners", "/partenaires", "/integrations",
+    "/reviews", "/avis", "/resources", "/ressources", "/directory", "/annuaire",
+    "/comparison", "/alternatives", "/best-trading-journals", "/trading-tools",
+  ];
 
   let n = 0;
-  const lot = bd.prepare("BEGIN");
   bd.exec("BEGIN");
-  for (const v of voisins) {
-    if (enfiler(`https://${v}/`, 0)) n++;
-    // Les pages ou vivent les liens sortants, tentees directement : un annuaire ne met
-    // pas ses fiches sur son accueil.
-    for (const c of ["/blog", "/blog/", "/tools", "/outils", "/partners", "/partenaires", "/reviews", "/avis"]) {
-      enfiler(`https://${v}${c}`, 1);
-    }
+  for (const [v, p] of parVoisin) {
+    if (enfiler(`https://${v}/`, 0, p)) n++;
+    if (p <= 2) for (const c of CHEMINS) enfiler(`https://${v}${c}`, 1, p);
   }
   bd.exec("COMMIT");
-  dire(`${n} accueil(s) et leurs pages a liens mis en file`);
+  dire(`${n} accueil(s) mis en file, plus leurs pages a liens pour les prioritaires`);
 }
 
 /* --------------------------------------------------------------------- main */
