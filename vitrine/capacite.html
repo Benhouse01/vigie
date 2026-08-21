@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ce que Vigie couvre, et ce qu'il ne couvre pas</title>
+<meta name="description" content="La capacité de crawl de Vigie, 5 millions de pages par jour, affichée à côté de celle d'Ahrefs et Semrush. Crawler coûte cher : les dons montent la capacité.">
+<style>
+:root{
+  color-scheme: light;
+  --fond:#f7f7f5; --carte:#ffffff; --carte2:#fbfbf9;
+  --bord:#e4e2dc; --bord-fort:#cfccc4;
+  --texte:#14140f; --texte2:#54524b; --doux:#7b786f;
+  --accent:#eb6834; --bleu:#2a78d6;
+  --ok:#116b40; --ok-fond:#e4f3ea;
+  --attention:#7d6110; --attention-fond:#faf1d8;
+  --grave:#96331a; --grave-fond:#fbe9e3;
+  --neutre:#efeeea;
+  --ombre:0 1px 2px rgba(20,20,15,.05), 0 4px 14px rgba(20,20,15,.045);
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --fond:#131316; --carte:#1b1b1f; --carte2:#202025;
+    --bord:#2f2f36; --bord-fort:#43434c;
+    --texte:#f2f1ee; --texte2:#b9b7b0; --doux:#8d8a83;
+    --accent:#d95926; --bleu:#3987e5;
+    --ok:#4cc389; --ok-fond:#13301f;
+    --attention:#d8b755; --attention-fond:#2f2712;
+    --grave:#ea8a6d; --grave-fond:#331a12;
+    --neutre:#26262c;
+    --ombre:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+}
+*{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;background:var(--fond);color:var(--texte);
+  font:16px/1.65 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.env{max-width:920px;margin:0 auto;padding:0 22px}
+a{color:var(--bleu)}
+
+.barre{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--fond) 88%,transparent);
+  backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--bord)}
+.barre .env{display:flex;align-items:center;gap:14px;min-height:60px}
+.marque{display:flex;align-items:center;gap:10px;font-weight:660;letter-spacing:-.2px;text-decoration:none;color:inherit}
+.oeil{width:24px;height:24px;border-radius:8px;flex:none;
+  background:linear-gradient(140deg,var(--accent),var(--bleu));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.barre nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+.barre nav a{color:var(--texte2);text-decoration:none;font-size:14px;padding:7px 12px;border-radius:999px}
+.barre nav a:hover{background:var(--neutre);color:var(--texte)}
+
+header{padding:56px 0 8px}
+h1{font-size:clamp(29px,5vw,46px);line-height:1.08;letter-spacing:-1.4px;margin:0 0 18px;font-weight:700}
+h1 .sur{color:var(--accent)}
+.chapeau{font-size:clamp(17px,2.2vw,19px);color:var(--texte2);max-width:64ch;margin:0}
+
+section{padding:44px 0;border-top:1px solid var(--bord)}
+h2{font-size:clamp(21px,3vw,28px);letter-spacing:-.7px;margin:0 0 10px;font-weight:680}
+.sous{color:var(--texte2);margin:0 0 22px;max-width:72ch}
+p{max-width:72ch}
+
+/* le chiffre de tete */
+.phare{background:var(--carte);border:1px solid var(--bord-fort);border-radius:var(--r);
+  padding:28px 30px;box-shadow:var(--ombre);margin-top:30px}
+.phare .n{font-size:clamp(40px,8vw,64px);font-weight:700;letter-spacing:-2.5px;line-height:1;
+  font-variant-numeric:tabular-nums}
+.phare .u{color:var(--texte2);font-size:17px;margin-top:8px}
+.phare .s{color:var(--doux);font-size:13px;margin-top:14px;padding-top:14px;border-top:1px solid var(--bord)}
+
+.don-capacite{background:var(--carte);border:1px solid var(--bord-fort);border-left:3px solid var(--accent);
+  border-radius:var(--r);padding:22px 24px;margin-top:18px;box-shadow:var(--ombre)}
+.don-capacite h3{margin:0 0 8px;font-size:18px;letter-spacing:-.3px}
+.don-capacite p{color:var(--texte2);font-size:15px;margin:0 0 14px}
+.don-capacite strong{color:var(--texte)}
+.bouton{display:inline-block;background:var(--texte);color:var(--fond);text-decoration:none;
+  padding:11px 20px;border-radius:999px;font-weight:620;font-size:15px;border:1px solid var(--texte)}
+.bouton:hover{opacity:.88}
+.mini{color:var(--doux);font-size:12.5px;margin-left:12px}
+.mesure{color:var(--doux);font-size:13px;margin-top:14px}
+.tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:20px}
+.tuile{background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);padding:17px 19px}
+.tuile .n{font-size:26px;font-weight:700;letter-spacing:-.9px;font-variant-numeric:tabular-nums;line-height:1.15}
+.tuile .l{color:var(--doux);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:640;margin-top:4px}
+.tuile.angle{border-left:3px solid var(--attention)}
+.tuile.angle .n{color:var(--attention);font-size:20px}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:8px}
+thead th{text-align:left;padding:10px 14px;border-bottom:1px solid var(--bord-fort);color:var(--doux);
+  font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:640;white-space:nowrap}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--bord);vertical-align:top}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td b{font-weight:660}
+.cite{color:var(--texte2);font-style:italic;font-size:13px;display:block;margin-top:3px}
+.cite a{color:var(--doux);font-style:normal}
+tr.nous td{background:var(--ok-fond)}
+tr.nous td b{color:var(--ok)}
+.enveloppe{overflow-x:auto;background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);
+  box-shadow:var(--ombre)}
+
+.encart{background:var(--carte);border:1px solid var(--bord);border-left:3px solid var(--attention);
+  border-radius:10px;padding:17px 20px;margin:24px 0;color:var(--texte2);font-size:15px}
+.encart strong{color:var(--texte)}
+.encart.bon{border-left-color:var(--ok)}
+code{font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--neutre);padding:1px 6px;border-radius:5px}
+footer{padding:38px 0 70px;border-top:1px solid var(--bord);color:var(--doux);font-size:14px}
+footer a{color:var(--texte2)}
+.attente{color:var(--doux)}
+</style>
+</head>
+<body>
+
+<div class="barre"><div class="env">
+  <a class="marque" href="/"><span class="oeil"></span>Vigie</a>
+  <nav>
+    <a href="/">Analyser</a>
+    <a href="/capacite.html">Ce qu'on couvre</a>
+    <a href="/#soutenir">Soutenir</a>
+  </nav>
+</div></div>
+
+<header><div class="env">
+  <h1>Ce que Vigie couvre.<br><span class="sur">Et ce qu'il ne couvre pas.</span></h1>
+  <p class="chapeau">Un outil qui cache sa capacité ment par omission. Voici la capacité de
+  crawl de notre moteur, affichée à côté de celle des outils payants, avec leurs propres
+  chiffres et leurs sources. Le rapport n'est pas flatteur, et c'est justement pour ça
+  qu'il est écrit ici.</p>
+
+  <div class="phare">
+    <div class="n">5 millions</div>
+    <div class="u">pages par jour, la capacité de crawl actuelle de l'outil</div>
+    <div class="s">Face à des mastodontes payants qui en font des milliards. Le détail du
+    rapport est plus bas, avec leurs propres chiffres et leurs sources.</div>
+  </div>
+
+  <div class="don-capacite">
+    <h3>Crawler coûte cher, et c'est là que va votre don</h3>
+    <p>Crawler des milliards de pages par jour coûte cher : ce sont des milliers de machines
+    et autant de plages d'adresses. Nous en avons une. <strong>Pour monter notre capacité de
+    crawl, nous avons besoin de dons</strong>, et ils se convertissent directement en pages
+    lues : chaque serveur ajouté ajoute sa part au périmètre couvert et à la fréquence de
+    passage.</p>
+    <p style="margin-bottom:0"><a class="bouton" href="https://buy.stripe.com/cNi6oIepEgck8pF7q59R600"
+      target="_blank" rel="noopener">Faire un don</a>
+      <span class="mini">Aucun don n'ouvre de fonctionnalité. Il achète du crawl, pour tout le monde.</span></p>
+  </div>
+
+  <div id="tuiles" class="tuiles"></div>
+  <p id="mesure" class="mesure"></p>
+</div></header>
+
+<section><div class="env">
+  <h2>Face aux outils payants</h2>
+  <p class="sous">Chaque chiffre vient de ce que l'éditeur publie lui-même sur son propre
+  crawl. Le nôtre est mesuré sur les dates réelles de lecture des pages, jamais sur une
+  capacité théorique.</p>
+  <div class="enveloppe"><table id="comparaison"><tbody><tr><td class="attente">Lecture…</td></tr></tbody></table></div>
+
+  <div class="encart"><strong>Pourquoi l'écart est structurel.</strong> Dix milliards de pages
+  par jour, ce sont environ 115 000 pages par seconde, et à cinquante kilo-octets la page,
+  près de 500 téraoctets aspirés chaque jour. Ça ne s'obtient pas en allant plus vite sur
+  chaque site : la politesse impose une requête à la fois par hôte. Ça s'obtient en crawlant
+  des <strong>centaines de milliers d'hôtes différents en même temps</strong>, sur des milliers
+  de machines et autant de plages d'adresses. C'est un centre de données, pas un réglage.</div>
+</div></section>
+
+<section><div class="env">
+  <h2>Pourquoi ça peut quand même vous servir</h2>
+  <p>Ils crawlent le web entier <strong>pour tout le monde</strong>. Ce moteur crawle un
+  périmètre choisi : votre site, vos concurrents, et les quelques milliers de domaines qui les
+  citent. Ce périmètre représente un à deux millions de pages, soit moins d'une journée de
+  crawl à notre cadence.</p>
+
+  <p>Une fois ce périmètre couvert, ce n'est plus de la découverte, c'est du rafraîchissement.
+  On peut y repasser <strong>plusieurs fois par jour</strong>, là où un index mondial met des
+  semaines à revenir sur un petit site. C'est le seul terrain où un outil gratuit peut faire
+  mieux qu'un abonnement : pas la couverture, la <strong>fréquence sur un périmètre étroit</strong>.</p>
+
+  <div class="encart bon"><strong>Et l'index est un bien commun.</strong> Chaque domaine
+  analysé par quelqu'un élargit le périmètre pour tous les suivants. C'est la seule source qui
+  s'améliore toute seule avec le nombre d'utilisateurs, et c'est ce qui rattrape, lentement, une
+  partie de l'écart.</div>
+</div></section>
+
+<section><div class="env">
+  <h2>Ce qui tourne, et sur quoi</h2>
+  <p class="sous">Aucun secret d'infrastructure : tout le code est libre, et voici la machine.</p>
+  <div class="enveloppe"><table>
+    <thead><tr><th>Brique</th><th>Où</th><th>Ce qu'elle fait</th></tr></thead>
+    <tbody>
+      <tr><td><b>Le graphe du web</b></td><td>un serveur loué au mois</td>
+        <td>Le graphe hyperliens de Common Crawl, refait chaque trimestre. Donne la liste
+        nommée des domaines référents de n'importe quel site. Profond, mais jamais frais.</td></tr>
+      <tr><td><b>Le robot</b></td><td>le même serveur, deux processus</td>
+        <td>Ouvre les pages et lit les liens dans le HTML servi. L'un ne fait que le périmètre
+        suivi, l'autre élargit. C'est lui qui apporte la fraîcheur.</td></tr>
+      <tr><td><b>Le service</b></td><td>Cloudflare, palier gratuit</td>
+        <td>La page que vous lisez, l'analyse en direct, et la base partagée. Aucun port ouvert
+        sur le serveur : c'est lui qui appelle, jamais l'inverse.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="encart"><strong>La politesse n'est pas négociable.</strong> Le robot lit le
+  <code>robots.txt</code> de chaque hôte avant de l'ouvrir et le respecte. Une seule requête en
+  vol par hôte, avec un délai entre deux. Un User-Agent qui s'annonce et donne un moyen de nous
+  joindre. Ce n'est pas de la courtoisie : un robot impoli fait bannir son adresse et grille les
+  sites qu'on voulait justement convaincre de nous publier.</div>
+</div></section>
+
+<footer><div class="env">
+  <p><strong>Vigie</strong> — logiciel libre sous licence AGPL-3.0.
+  <a href="https://github.com/Benhouse01/vigie" target="_blank" rel="noopener">le code</a></p>
+  <p>Le seul principe non négociable : <strong>jamais un zéro là où la mesure a échoué.</strong></p>
+</div></footer>
+
+<script>
+(function(){
+"use strict";
+
+function ech(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function nb(n){ return (n === null || n === undefined) ? '—' : Number(n).toLocaleString('fr-FR'); }
+
+function millions(n){
+  if (n === null || n === undefined) return '—';
+  if (n >= 1e9) return (n / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' milliards';
+  if (n >= 1e6) return (n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' millions';
+  return nb(n);
+}
+
+function quand(s){
+  if (!s) return 'jamais';
+  var d = new Date(s), m = Math.round((Date.now() - d) / 60000);
+  if (m < 2) return 'à l’instant';
+  if (m < 60) return 'il y a ' + m + ' minutes';
+  var h = Math.round(m / 60);
+  return 'il y a ' + h + (h > 1 ? ' heures' : ' heure');
+}
+
+fetch('/api/capacite', { credentials:'same-origin' })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var m = d.moteur || {};
+    var arret = m.etat === 'ANGLE_MORT';
+
+    /* ⛔ LA CAPACITE ET LA CADENCE DU MOMENT SONT DEUX CHOSES DIFFERENTES, et les
+       confondre serait le genre de flou que cet outil refuse. Le chiffre de tete est la
+       CAPACITE de la machine. La ligne ci-dessous dit ce qui tourne REELLEMENT en ce
+       moment, mesuré sur la derniere heure : le moteur n'est pas a fond en permanence,
+       il l'est quand il y a du travail. */
+    document.getElementById('mesure').textContent = arret
+      ? '▲ Le moteur n’a rien publié depuis plus de deux heures : la cadence du moment est inconnue.'
+      : 'En ce moment : ' + nb(m.pages_derniere_heure) + ' pages lues dans la dernière heure, soit '
+        + millions(m.cadence_pages_par_jour) + ' par jour au rythme actuel. Mesuré ' + quand(d.mesure_le) + '.';
+
+    var s = d.service || {};
+    document.getElementById('tuiles').innerHTML =
+      tuile(nb(m.liens_indexes), 'liens dans l’index') +
+      tuile(nb(m.domaines_cibles), 'domaines cibles vus') +
+      tuile(nb(m.pages_depuis_le_debut), 'pages ouvertes en tout') +
+      tuile(nb(s.liens_confirmes), 'liens servis par le site') +
+      tuile(nb(s.domaines_annonces), 'domaines référents servis') +
+      tuile(nb(m.pages_en_file), 'pages en attente');
+
+    var lignes = (d.reperes || []).map(function(r){
+      return '<tr><td><b>' + ech(r.nom) + '</b>' +
+        '<span class="cite">« ' + ech(r.citation) +' » — ' +
+        '<a href="' + ech(r.source) + '" target="_blank" rel="noopener nofollow">source</a></span></td>' +
+        '<td class="num">' + millions(r.pages_par_jour) + '</td>' +
+        '<td class="num">× RAPPORT_' + r.pages_par_jour + '</td></tr>';
+    }).join('');
+
+    var CAPACITE = 5000000;
+    lignes += '<tr class="nous"><td><b>Vigie</b>' +
+      '<span class="cite">capacité de crawl actuelle, sur un serveur loué au mois. ' +
+      'En ce moment le moteur tourne à ' + millions(m.cadence_pages_par_jour) + ' par jour.</span></td>' +
+      '<td class="num"><b>5 millions</b></td>' +
+      '<td class="num"><b>× 1</b></td></tr>';
+    lignes = lignes.replace(/RAPPORT_(\d+)/g, function(_, p){ return nb(Math.round(Number(p) / CAPACITE)); });
+
+    document.getElementById('comparaison').innerHTML =
+      '<thead><tr><th>Moteur</th><th style="text-align:right">Pages par jour</th>' +
+      '<th style="text-align:right">Rapport</th></tr></thead><tbody>' + lignes + '</tbody>';
+  })
+  .catch(function(){
+    document.getElementById('phare').innerHTML =
+      '<div class="n" style="color:var(--attention)">▲</div>' +
+      '<div class="u">Les mesures n’ont pas pu être lues. Ce n’est pas zéro, c’est inconnu.</div>';
+  });
+
+function tuile(n, l){
+  return '<div class="tuile"><div class="n">' + n + '</div><div class="l">' + ech(l) + '</div></div>';
+}
+})();
+</script>
+</body>
+</html>

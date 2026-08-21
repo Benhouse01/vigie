@@ -128,3 +128,16 @@ CREATE TABLE IF NOT EXISTS referents (
   PRIMARY KEY (cible, domaine_src, source)
 );
 CREATE INDEX IF NOT EXISTS idx_ref_cible ON referents(cible);
+
+-- LES METRIQUES DU MOTEUR, ECRITES PAR LE SERVEUR ET LUES PAR LA VITRINE.
+--
+-- ⛔ ELLES SONT PUBLIQUES, ET C'EST LE POINT. Un outil qui cache sa capacite laisse
+--    croire qu'il voit tout. Celui-ci affiche sa cadence reelle a cote de celle des
+--    outils payants, meme quand le rapport est de un a quatre mille. Un utilisateur
+--    qui sait ce que l'outil couvre peut s'en servir ; un utilisateur a qui on l'a
+--    cache decouvre le trou au pire moment.
+CREATE TABLE IF NOT EXISTS metriques (
+  cle     TEXT PRIMARY KEY,
+  valeur  TEXT NOT NULL,
+  maj_le  TEXT NOT NULL
+);
