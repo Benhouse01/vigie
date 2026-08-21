@@ -1,0 +1,483 @@
+// NOTRE PROPRE ROBOT, CELUI QUI TOURNE EN CONTINU.
+//
+// ⛔ POURQUOI IL EXISTE, ET POURQUOI RIEN D'AUTRE NE LE REMPLACE.
+//    Le graphe de Common Crawl est refait CHAQUE TRIMESTRE. Il donne de la profondeur
+//    (36 891 domaines referents sur un gros site, mesure le 21/08/2026) mais il ne donne
+//    aucune fraicheur : un domaine cree depuis la derniere edition en est absent, et un
+//    lien pose la semaine derniere n'y sera pas avant des mois.
+//    Ahrefs et Semrush n'ont pas ce probleme parce qu'ils font tourner leur robot en
+//    permanence. C'est exactement ce que fait ce fichier.
+//
+// ⛔ ET LE SEUL ENDROIT OU CHERCHER, C'EST CHEZ LES VOISINS.
+//    Crawler le web au hasard demanderait les moyens d'Ahrefs. Mais les sites qui
+//    pointent vers VOS CONCURRENTS sont exactement ceux qui peuvent pointer vers vous :
+//    les annuaires du secteur, les comparatifs, les blogs de niche, les forums. Le
+//    graphe trimestriel donne cette liste (4 483 domaines pour un secteur entier), et
+//    le robot la crawle en continu. Chaque lien trouve est FRAIS et lu dans le HTML.
+//
+// ⛔ LA POLITESSE N'EST PAS NEGOCIABLE, ET CE N'EST PAS DE LA COURTOISIE.
+//    robots.txt lu et respecte avant toute page. Une seule requete en vol par hote, avec
+//    un delai entre deux. Un User-Agent qui s'annonce et donne un moyen de nous joindre.
+//    Un robot impoli fait bannir l'adresse du serveur, et il grille les sites qu'on
+//    voulait justement convaincre de nous publier.
+//
+// Usage :
+//   node serveur/crawler.mjs --semer          remplit la file depuis la base D1
+//   node serveur/crawler.mjs                  crawle en continu
+//   node serveur/crawler.mjs --pages=5000     s'arrete apres ce nombre de pages
+//   node serveur/crawler.mjs --etat           dit ou il en est, sans rien crawler
+
+import fs from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+
+const arg = (nom, defaut = null) => {
+  const t = process.argv.find((a) => a.startsWith(`--${nom}=`));
+  return t ? t.slice(nom.length + 3) : defaut;
+};
+
+const DOSSIER = process.env.VIGIE_DONNEES || "C:/vigie/donnees";
+const BD = path.join(DOSSIER, "index.sqlite");
+const AGENT = "Mozilla/5.0 (compatible; VigieBot/1.0; +https://vigie-seo.pages.dev/robot)";
+
+const EN_VOL = Number(arg("parallele", 24));      // hotes crawles en meme temps
+const DELAI_HOTE = Number(arg("delai", 2000));    // ms entre deux pages du meme hote
+const PROFONDEUR_MAX = Number(arg("profondeur", 3));
+const PAGES_MAX = Number(arg("pages", 0));        // 0 = sans fin
+const OCTETS_MAX = 1_200_000;
+
+const horodate = () => new Date().toISOString().replace("T", " ").slice(0, 19);
+const dire = (m) => console.log(`[${horodate()}] ${m}`);
+
+// ⛔ UN FILET, ET IL EST NECESSAIRE. Une exception levee depuis un evenement de socket
+//    par une bibliotheque tierce ne traverse aucun try/catch de la boucle. Sans ce
+//    filet, le robot meurt en pleine passe et la file reste figee jusqu au prochain
+//    reveil de la tache planifiee. L etat vit en base, donc perdre une page n a aucune
+//    consequence : on la note et on continue.
+let incidents = 0;
+process.on("uncaughtException", (e) => {
+  incidents++;
+  dire(`incident rattrape (${incidents}) : ${e.name} ${String(e.message).slice(0, 120)}`);
+  if (incidents > 500) { dire("trop d incidents, on s arrete pour que la tache relance proprement"); process.exit(1); }
+});
+process.on("unhandledRejection", (e) => {
+  incidents++;
+  dire(`promesse non tenue (${incidents}) : ${String(e && e.message || e).slice(0, 120)}`);
+});
+
+fs.mkdirSync(DOSSIER, { recursive: true });
+const bd = new DatabaseSync(BD);
+
+// ⛔ WAL ET synchronous=NORMAL, SINON LE ROBOT PASSE SON TEMPS A ATTENDRE LE DISQUE.
+//    En mode journal par defaut, chaque page ecrite force une synchronisation complete :
+//    mesure a une page par seconde au lieu de trente.
+bd.exec("PRAGMA journal_mode = WAL");
+bd.exec("PRAGMA synchronous = NORMAL");
+bd.exec("PRAGMA temp_store = MEMORY");
+bd.exec("PRAGMA cache_size = -200000");
+
+bd.exec(`
+CREATE TABLE IF NOT EXISTS file (
+  url        TEXT PRIMARY KEY,
+  hote       TEXT NOT NULL,
+  profondeur INTEGER NOT NULL DEFAULT 0,
+  etat       TEXT NOT NULL DEFAULT 'attente',   -- attente | lu | mur | interdit
+  ajoute_le  TEXT NOT NULL,
+  lu_le      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_file_travail ON file(etat, profondeur);
+CREATE INDEX IF NOT EXISTS idx_file_hote ON file(hote, etat);
+
+CREATE TABLE IF NOT EXISTS hotes (
+  hote        TEXT PRIMARY KEY,
+  interdit    TEXT,
+  delai       REAL NOT NULL DEFAULT 0,
+  mur         INTEGER NOT NULL DEFAULT 0,
+  robots_le   TEXT,
+  pages_lues  INTEGER NOT NULL DEFAULT 0,
+  dernier_le  TEXT
+);
+
+-- L'INDEX DE LIENS. C'est le produit du robot, et il est valable pour TOUS les
+-- domaines, pas seulement ceux qu'on suit : une page lue une fois rend tous ses liens
+-- sortants d'un coup.
+CREATE TABLE IF NOT EXISTS liens (
+  url_src      TEXT NOT NULL,
+  domaine_src  TEXT NOT NULL,
+  domaine_dest TEXT NOT NULL,
+  url_dest     TEXT NOT NULL,
+  ancre        TEXT,
+  rel          TEXT NOT NULL,
+  vu_le        TEXT NOT NULL,
+  PRIMARY KEY (url_src, url_dest)
+);
+CREATE INDEX IF NOT EXISTS idx_liens_dest ON liens(domaine_dest, vu_le);
+CREATE INDEX IF NOT EXISTS idx_liens_src ON liens(domaine_src);
+`);
+
+/* -------------------------------------------------------------- utilitaires */
+
+const domaineDe = (url) => {
+  try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ""); } catch { return null; }
+};
+
+const memeSite = (a, b) => !!a && !!b && (a === b || a.endsWith("." + b) || b.endsWith("." + a));
+
+const EXTENSIONS_MORTES = /\.(jpe?g|png|gif|webp|svg|ico|css|js|mjs|pdf|zip|rar|gz|mp[34]|avi|mov|woff2?|ttf|eot|xml|rss|json|csv|xlsx?|docx?|pptx?)$/i;
+
+/**
+ * ⛔ ON PART DE LA BALISE OUVRANTE, JAMAIS DE LA PAIRE <a>…</a>.
+ *    Exiger la fermeture dans les 400 caracteres rate TOUS les liens qui enveloppent un
+ *    bloc : une carte, une image avec legende, un article entier. Sur le meme jeu de
+ *    pages, la correction a fait passer 3 liens qualifies a 21.
+ */
+function liensDe(html, base) {
+  const trouves = [];
+  const re = /<a\b([^>]*)>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const attributs = m[1];
+    const href = /\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attributs);
+    if (!href) continue;
+    const brut = (href[2] ?? href[3] ?? href[4] ?? "").trim();
+    if (!brut || brut.startsWith("#") || /^(javascript|mailto|tel|data):/i.test(brut)) continue;
+
+    let url;
+    try { url = new URL(brut, base); } catch { continue; }
+    if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+    url.hash = "";
+    if (url.href.length > 500) continue;
+
+    const relAttr = /\brel\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attributs);
+    const relBrut = relAttr ? (relAttr[2] ?? relAttr[3] ?? relAttr[4] ?? "").trim() : "";
+
+    const apres = html.slice(re.lastIndex, re.lastIndex + 500);
+    const fin = apres.indexOf("</a>");
+    const ancre = fin >= 0
+      ? apres.slice(0, fin).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)
+      : "";
+
+    trouves.push({ url: url.href, relBrut, ancre });
+  }
+  return trouves;
+}
+
+/**
+ * ⛔ « non qualifie » N'EST PAS UNE VALEUR ACCEPTABLE. Un lien est dofollow, nofollow,
+ *    ugc ou sponsored. L'absence d'attribut rel EST la definition de dofollow.
+ */
+function qualifierRel(relBrut) {
+  const mots = (relBrut || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const gardes = mots.filter((x) => ["nofollow", "ugc", "sponsored"].includes(x));
+  return gardes.length ? [...new Set(gardes)].sort().join("+") : "dofollow";
+}
+
+/* ------------------------------------------------------------------ robots */
+
+const memoireRobots = new Map();
+
+async function reglesDe(hote) {
+  if (memoireRobots.has(hote)) return memoireRobots.get(hote);
+
+  const veille = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const cache = bd.prepare("SELECT interdit, delai, mur, robots_le FROM hotes WHERE hote = ?").get(hote);
+  if (cache && cache.robots_le && cache.robots_le > veille) {
+    const r = { interdit: (cache.interdit || "").split("\n").filter(Boolean), delai: cache.delai, mur: !!cache.mur };
+    memoireRobots.set(hote, r);
+    return r;
+  }
+
+  let interdit = [];
+  let delai = 0;
+  let mur = false;
+  try {
+    const r = await fetch(`https://${hote}/robots.txt`, {
+      headers: { "user-agent": AGENT, accept: "text/plain" },
+      signal: AbortSignal.timeout(8000),
+      redirect: "follow",
+    });
+    if (r.status === 404 || r.status === 410) {
+      interdit = [];
+    } else if (r.ok) {
+      const texte = (await r.text()).slice(0, 120000);
+      let concerne = false;
+      for (const brute of texte.split(/\r?\n/)) {
+        const ligne = brute.split("#")[0].trim();
+        const sep = ligne.indexOf(":");
+        if (sep < 0) continue;
+        const cle = ligne.slice(0, sep).trim().toLowerCase();
+        const val = ligne.slice(sep + 1).trim();
+        if (cle === "user-agent") concerne = val === "*" || /vigie/i.test(val);
+        else if (concerne && cle === "disallow" && val) interdit.push(val);
+        else if (concerne && cle === "crawl-delay") {
+          const n = parseFloat(val);
+          if (Number.isFinite(n)) delai = Math.min(n * 1000, 30000);
+        }
+      }
+    } else {
+      // ⛔ UN 403 SUR robots.txt N'EST PAS UNE AUTORISATION. Seul un 404 dit « aucune
+      //    restriction ». Un hote qui oppose un mur des le robots.txt ne se crawle pas.
+      mur = true;
+    }
+  } catch {
+    mur = true;
+  }
+
+  bd.prepare(
+    `INSERT INTO hotes (hote, interdit, delai, mur, robots_le) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(hote) DO UPDATE SET interdit = excluded.interdit, delai = excluded.delai,
+       mur = excluded.mur, robots_le = excluded.robots_le`
+  ).run(hote, interdit.join("\n"), delai, mur ? 1 : 0, new Date().toISOString());
+
+  const regles = { interdit, delai, mur };
+  memoireRobots.set(hote, regles);
+  return regles;
+}
+
+function autorise(regles, chemin) {
+  if (regles.mur) return false;
+  for (const motif of regles.interdit) {
+    if (motif === "/") return false;
+    const prefixe = motif.split("*")[0];
+    if (prefixe && chemin.startsWith(prefixe)) return false;
+  }
+  return true;
+}
+
+/* ------------------------------------------------------------- la file */
+
+const ajouter = bd.prepare(
+  "INSERT INTO file (url, hote, profondeur, etat, ajoute_le) VALUES (?, ?, ?, 'attente', ?) ON CONFLICT(url) DO NOTHING"
+);
+const marquer = bd.prepare("UPDATE file SET etat = ?, lu_le = ? WHERE url = ?");
+const noterLien = bd.prepare(
+  `INSERT INTO liens (url_src, domaine_src, domaine_dest, url_dest, ancre, rel, vu_le)
+   VALUES (?, ?, ?, ?, ?, ?, ?)
+   ON CONFLICT(url_src, url_dest) DO UPDATE SET rel = excluded.rel, ancre = excluded.ancre, vu_le = excluded.vu_le`
+);
+
+function enfiler(url, profondeur) {
+  const hote = domaineDe(url);
+  if (!hote) return false;
+  if (EXTENSIONS_MORTES.test(new URL(url).pathname)) return false;
+  ajouter.run(url, hote, profondeur, new Date().toISOString());
+  return true;
+}
+
+/* ------------------------------------------------------------- le crawl */
+
+let pagesLues = 0;
+let liensNotes = 0;
+const occupes = new Set();
+
+/**
+ * Ouvre une page, avec plafond d octets et de temps.
+ *
+ * ⛔ ON INTERROMPT LA REQUETE, ON N ANNULE PAS LE LECTEUR.
+ *    Appeler reader.cancel() pour arreter la lecture au plafond d octets fait tomber
+ *    l analyseur HTTP de Node avec « AssertionError: assert(!this.paused) », depuis les
+ *    entrailles d undici. Ce n est PAS rattrapable par un try/catch autour du fetch :
+ *    l exception surgit plus tard, sur un evenement de socket. Le robot est mort au bout
+ *    de 1 330 pages le 21/08/2026, sans que la boucle puisse rien y faire.
+ *    Un AbortController, lui, est le chemin prevu : il defait la requete proprement.
+ */
+async function ouvrir(url) {
+  const controle = new AbortController();
+  const chrono = setTimeout(() => controle.abort(), 12000);
+  try {
+    const r = await fetch(url, {
+      headers: {
+        "user-agent": AGENT,
+        accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+        "accept-language": "fr,en;q=0.8",
+      },
+      redirect: "follow",
+      signal: controle.signal,
+    });
+    if (!r.ok) { controle.abort(); return { mur: "HTTP " + r.status }; }
+    const type = r.headers.get("content-type") || "";
+    if (type && !/html|xhtml|text\/plain/i.test(type)) { controle.abort(); return { mur: "type " + type.split(";")[0] }; }
+
+    // Une page annoncee comme enorme ne s ouvre pas du tout : la lire pour la jeter
+    // ensuite coute la bande passante de quelqu un d autre.
+    const annonce = Number(r.headers.get("content-length") || 0);
+    if (annonce > OCTETS_MAX * 4) { controle.abort(); return { mur: "trop lourde" }; }
+
+    const lecteur = r.body?.getReader();
+    if (!lecteur) return { mur: "corps vide" };
+    const morceaux = [];
+    let total = 0;
+    let coupee = false;
+    for (;;) {
+      const { done, value } = await lecteur.read();
+      if (done) break;
+      morceaux.push(value);
+      total += value.length;
+      if (total >= OCTETS_MAX) { coupee = true; break; }
+    }
+    if (coupee) controle.abort();
+
+    const octets = new Uint8Array(total);
+    let i = 0;
+    for (const m of morceaux) { octets.set(m.subarray(0, Math.min(m.length, total - i)), i); i += m.length; if (i >= total) break; }
+    return { html: new TextDecoder("utf-8", { fatal: false }).decode(octets), url: r.url };
+  } catch (e) {
+    return { mur: e.name === "AbortError" || e.name === "TimeoutError" ? "delai depasse" : "injoignable" };
+  } finally {
+    clearTimeout(chrono);
+  }
+}
+/** Une page : on l'ouvre, on note TOUS ses liens sortants, on enfile ses liens internes. */
+async function traiter(ligne) {
+  const { url, hote, profondeur } = ligne;
+
+  const regles = await reglesDe(hote);
+  let chemin = "/";
+  try { chemin = new URL(url).pathname; } catch { /* garde "/" */ }
+  if (!autorise(regles, chemin)) {
+    marquer.run("interdit", new Date().toISOString(), url);
+    return;
+  }
+
+  const res = await ouvrir(url);
+  if (res.mur) {
+    marquer.run("mur", new Date().toISOString(), url);
+    return;
+  }
+
+  pagesLues++;
+  const base = res.url || url;
+  const maintenant = new Date().toISOString();
+  const internes = [];
+
+  for (const l of liensDe(res.html, base)) {
+    const dest = domaineDe(l.url);
+    if (!dest) continue;
+    if (memeSite(dest, hote)) {
+      if (profondeur < PROFONDEUR_MAX) internes.push(l.url);
+      continue;
+    }
+    // ⛔ ON NOTE TOUS LES LIENS SORTANTS, PAS SEULEMENT CEUX QU'ON SUIT.
+    //    Une page lue une fois rend tous ses liens d'un coup : la filtrer sur une liste
+    //    de cibles obligerait a la relire pour chaque nouveau domaine demande.
+    noterLien.run(base, hote, dest, l.url, l.ancre || null, qualifierRel(l.relBrut), maintenant);
+    liensNotes++;
+  }
+
+  // Quelques liens internes seulement : le but est de couvrir BEAUCOUP de sites, pas
+  // d'aspirer un site entier.
+  for (const u of internes.slice(0, 25)) enfiler(u, profondeur + 1);
+
+  marquer.run("lu", maintenant, url);
+  bd.prepare("UPDATE hotes SET pages_lues = pages_lues + 1, dernier_le = ? WHERE hote = ?").run(maintenant, hote);
+}
+
+/**
+ * Prend la prochaine page a lire, sur un hote qui n'est PAS deja en cours.
+ * ⛔ UNE SEULE REQUETE EN VOL PAR HOTE. Sans ce verrou, vingt-quatre lecteurs tombent
+ *    tous sur le meme gros site et le martelent : c'est ce qui fait bannir une adresse.
+ */
+function prochaine() {
+  const exclus = [...occupes];
+  const trous = exclus.map(() => "?").join(",");
+  const sql =
+    "SELECT url, hote, profondeur FROM file WHERE etat = 'attente'" +
+    (exclus.length ? ` AND hote NOT IN (${trous})` : "") +
+    " ORDER BY profondeur ASC, rowid ASC LIMIT 1";
+  return bd.prepare(sql).get(...exclus);
+}
+
+async function lecteur() {
+  for (;;) {
+    if (PAGES_MAX && pagesLues >= PAGES_MAX) return;
+    const ligne = prochaine();
+    if (!ligne) { await new Promise((s) => setTimeout(s, 1500)); continue; }
+    occupes.add(ligne.hote);
+    try {
+      await traiter(ligne);
+    } catch (e) {
+      marquer.run("mur", new Date().toISOString(), ligne.url);
+    } finally {
+      const regles = memoireRobots.get(ligne.hote);
+      const attente = Math.max(DELAI_HOTE, regles?.delai || 0);
+      setTimeout(() => occupes.delete(ligne.hote), attente);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ semer */
+
+async function semer() {
+  const COMPTE = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const JETON = process.env.CLOUDFLARE_API_TOKEN;
+  const BASE = process.env.VIGIE_D1;
+  if (!COMPTE || !JETON || !BASE) {
+    console.error("⛔ identifiants Cloudflare absents : impossible de lire la liste des voisins.");
+    process.exit(2);
+  }
+
+  const r = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${COMPTE}/d1/database/${BASE}/query`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${JETON}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        sql: "SELECT DISTINCT domaine_src FROM referents UNION SELECT DISTINCT domaine_src FROM backlinks",
+      }),
+    }
+  );
+  const d = await r.json();
+  if (!d.success) { console.error("lecture D1 en echec :", JSON.stringify(d.errors).slice(0, 200)); process.exit(1); }
+
+  const voisins = (d.result?.[0]?.results || []).map((l) => l.domaine_src).filter(Boolean);
+  dire(`${voisins.length} domaine(s) voisin(s) a semer`);
+
+  let n = 0;
+  const lot = bd.prepare("BEGIN");
+  bd.exec("BEGIN");
+  for (const v of voisins) {
+    if (enfiler(`https://${v}/`, 0)) n++;
+    // Les pages ou vivent les liens sortants, tentees directement : un annuaire ne met
+    // pas ses fiches sur son accueil.
+    for (const c of ["/blog", "/blog/", "/tools", "/outils", "/partners", "/partenaires", "/reviews", "/avis"]) {
+      enfiler(`https://${v}${c}`, 1);
+    }
+  }
+  bd.exec("COMMIT");
+  dire(`${n} accueil(s) et leurs pages a liens mis en file`);
+}
+
+/* --------------------------------------------------------------------- main */
+
+if (process.argv.includes("--etat")) {
+  const f = bd.prepare("SELECT etat, COUNT(*) AS n FROM file GROUP BY etat").all();
+  const l = bd.prepare("SELECT COUNT(*) AS liens, COUNT(DISTINCT domaine_dest) AS cibles, COUNT(DISTINCT domaine_src) AS sources FROM liens").get();
+  const h = bd.prepare("SELECT COUNT(*) AS n FROM hotes WHERE mur = 0").get();
+  console.log("file :", f.map((x) => `${x.etat}=${x.n}`).join("  "));
+  console.log("index :", `${l.liens} lien(s), ${l.sources} source(s), ${l.cibles} domaine(s) cible(s) distincts`);
+  console.log("hotes ouverts :", h.n);
+  console.log("base :", (fs.statSync(BD).size / 1024 / 1024).toFixed(1), "Mo");
+  process.exit(0);
+}
+
+if (process.argv.includes("--semer")) {
+  await semer();
+  process.exit(0);
+}
+
+dire(`robot demarre : ${EN_VOL} hotes en parallele, ${DELAI_HOTE} ms entre deux pages d'un meme hote`);
+const attente = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE etat = 'attente'").get();
+dire(`${attente.n} page(s) en file`);
+if (!attente.n) {
+  dire("file vide : lancez d'abord node serveur/crawler.mjs --semer");
+  process.exit(0);
+}
+
+const minuterie = setInterval(() => {
+  const f = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE etat = 'attente'").get();
+  dire(`${pagesLues} page(s) lue(s), ${liensNotes} lien(s) note(s), ${f.n} en file`);
+}, 60000);
+
+await Promise.all(Array.from({ length: EN_VOL }, () => lecteur()));
+clearInterval(minuterie);
+dire(`termine : ${pagesLues} page(s), ${liensNotes} lien(s)`);
