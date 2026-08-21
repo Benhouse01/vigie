@@ -146,6 +146,12 @@ async function assurerDansLaFile(cibles) {
   }
 }
 
+// ⛔ POWERSHELL ECRIT UN BOM EN TETE DE SES FICHIERS UTF-8, ET JSON.parse LE REFUSE.
+//    Le message d erreur ne nomme ni le BOM ni le fichier : il ressemble a un JSON
+//    corrompu alors que le contenu est parfait. Trois caracteres invisibles ont coute
+//    une passe entiere le 21/08/2026.
+const marqueOrdreOctets = (s) => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
+
 /**
  * Pousse un resultat DEJA calcule, sans refaire la passe.
  *
@@ -155,7 +161,7 @@ async function assurerDansLaFile(cibles) {
  *    chargement apres avoir corrige la table d arrivee.
  */
 async function pousserFichier(chemin) {
-  const j = JSON.parse(fs.readFileSync(chemin, "utf8"));
+  const j = JSON.parse(marqueOrdreOctets(fs.readFileSync(chemin, "utf8")));
   const cibles = Object.keys(j.cibles || {});
   dire("reprise de " + chemin + " : edition " + j.edition + ", " + cibles.length + " cible(s)");
   await assurerDansLaFile(cibles);

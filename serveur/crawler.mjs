@@ -486,7 +486,143 @@ async function lecteur() {
 }
 /* ------------------------------------------------------------------ semer */
 
+// ⛔ POWERSHELL ECRIT UN BOM EN TETE DE SES FICHIERS UTF-8, ET JSON.parse LE REFUSE.
+//    Le message d erreur ne nomme ni le BOM ni le fichier : il ressemble a un JSON
+//    corrompu alors que le contenu est parfait. Trois caracteres invisibles ont coute
+//    une passe entiere le 21/08/2026.
+const marqueOrdreOctets = (s) => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
+
+/**
+ * Seme depuis le resultat COMPLET d une passe de graphe, sans passer par D1.
+ *
+ * ⛔ D1 NE PORTE QU UNE VERSION PLAFONNEE DE LA VERITE. On y pousse au plus quelques
+ *    centaines de domaines referents par cible, parce que son palier gratuit accepte
+ *    100 000 lignes ecrites par jour. Semer le robot depuis D1 reviendrait donc a lui
+ *    cacher la majorite du terrain : 4 483 domaines au lieu de 42 000 sur le meme
+ *    secteur, mesure le 21/08/2026. Le fichier de passe, lui, est complet.
+ */
+function semerDepuisFichier(chemin, prioritaires, massives) {
+  const j = JSON.parse(marqueOrdreOctets(fs.readFileSync(chemin, "utf8")));
+  const parVoisin = new Map();
+
+  for (const [cible, v] of Object.entries(j.cibles || {})) {
+    const c = String(cible).toLowerCase();
+    const p = prioritaires.includes(c) ? 1 : massives.includes(c) ? 5 : 2;
+    for (const d of v.domaines || []) {
+      if (!d) continue;
+      parVoisin.set(d, Math.min(parVoisin.get(d) ?? 9, p));
+    }
+  }
+  return parVoisin;
+}
+
+/**
+ * LA CO-CITATION, ET C EST LA BOUCLE QUI FAIT GROSSIR L INDEX SUR UN SITE JEUNE.
+ *
+ * ⛔ LE CONSTAT QUI L IMPOSE, MESURE LE 21/08/2026.
+ *    Le robot trouvait 62 domaines referents pour un concurrent et 3 pour le site de
+ *    l utilisateur. Ce n etait pas un defaut du robot : il crawle les domaines qui
+ *    citent les CONCURRENTS, donc il retrouve forcement les concurrents. Le site jeune,
+ *    lui, n a que dix-sept referents connus, donc rien a crawler autour de lui.
+ *
+ *    Le raisonnement qui debloque : une page qui liste un produit en liste toujours
+ *    d autres. Si une page cite l annuaire ou vous etes inscrit, elle cite aussi les
+ *    annuaires FRERES, ceux ou vous devriez etre et ou vous etes peut-etre deja sans
+ *    le savoir. On part donc des domaines qui vous citent, on prend les pages qui les
+ *    citent, et on ramasse tout ce que ces pages citent d autre. C est exactement la
+ *    facon dont un profil de liens se decouvre de proche en proche.
+ *
+ * ⛔ ET ON ECARTE CE QUI EST CITE PARTOUT. Un domaine cite par plus d un quart des
+ *    pages de l index est un reseau social ou un outil de mesure, pas un annuaire de
+ *    votre secteur. Le garder noierait la liste.
+ */
+function semerCoCitation(graines, plafond = 4000) {
+  if (!graines.length) return new Map();
+
+  const trous = graines.map(() => "?").join(",");
+  const pages = bd
+    .prepare(`SELECT DISTINCT url_src FROM liens WHERE domaine_dest IN (${trous}) LIMIT 30000`)
+    .all(...graines)
+    .map((l) => l.url_src);
+
+  dire(`${pages.length} page(s) citent au moins une de vos ${graines.length} graine(s)`);
+  if (!pages.length) return new Map();
+
+  // Combien de pages au total citent chaque domaine : sert a ecarter les omnipresents.
+  const totalPages = bd.prepare("SELECT COUNT(DISTINCT url_src) AS n FROM liens").get().n || 1;
+  const plafondOmnipresent = Math.max(50, Math.floor(totalPages / 4));
+
+  const compte = new Map();
+  const requete = bd.prepare("SELECT domaine_dest FROM liens WHERE url_src = ?");
+  for (const p of pages) {
+    for (const l of requete.all(p)) {
+      const d = l.domaine_dest;
+      if (!d || graines.includes(d)) continue;
+      compte.set(d, (compte.get(d) || 0) + 1);
+    }
+  }
+
+  const omnipresents = new Set(
+    bd.prepare("SELECT domaine_dest FROM liens GROUP BY domaine_dest HAVING COUNT(DISTINCT url_src) > ?")
+      .all(plafondOmnipresent)
+      .map((l) => l.domaine_dest)
+  );
+
+  const retenus = [...compte.entries()]
+    .filter(([d]) => !omnipresents.has(d))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, plafond);
+
+  dire(`${compte.size} domaine(s) co-cites, ${omnipresents.size} ecarte(s) comme omnipresents, ${retenus.length} retenus`);
+  return new Map(retenus.map(([d]) => [d, 1]));
+}
+
 async function semer() {
+  const prioritaires = String(arg("prioritaires", "") || "")
+    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const massives = String(arg("massives", "tradingview.com,myfxbook.com"))
+    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+
+  const CHEMINS = [
+    "/blog", "/blog/", "/tools", "/outils", "/partners", "/partenaires", "/integrations",
+    "/reviews", "/avis", "/resources", "/ressources", "/directory", "/annuaire",
+    "/comparison", "/alternatives", "/best-trading-journals", "/trading-tools",
+  ];
+
+  // ⛔ LES GRAINES SONT LES DOMAINES QUI VOUS CITENT DEJA, pas vos concurrents.
+  const cocitation = arg("cocitation");
+  if (cocitation) {
+    const graines = cocitation.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+    const parVoisin = semerCoCitation(graines, Number(arg("plafond", 4000)));
+    let m = 0;
+    bd.exec("BEGIN");
+    for (const [v, p] of parVoisin) {
+      if (enfiler(`https://${v}/`, 0, p)) m++;
+      for (const c of CHEMINS) enfiler(`https://${v}${c}`, 1, p);
+    }
+    bd.exec("COMMIT");
+    dire(`${m} domaine(s) co-cite(s) mis en file en priorite 1`);
+    return;
+  }
+
+  const fichier = arg("fichier");
+  if (fichier) {
+    const parVoisin = semerDepuisFichier(fichier, prioritaires, massives);
+    const compte = {};
+    for (const p of parVoisin.values()) compte[p] = (compte[p] || 0) + 1;
+    dire(`${parVoisin.size} domaine(s) voisin(s) depuis ${fichier} : ` +
+      Object.entries(compte).map(([p, n]) => `${n} en priorite ${p}`).join(", "));
+    let m = 0;
+    bd.exec("BEGIN");
+    for (const [v, p] of parVoisin) {
+      if (enfiler(`https://${v}/`, 0, p)) m++;
+      if (p <= 2) for (const c of CHEMINS) enfiler(`https://${v}${c}`, 1, p);
+    }
+    bd.exec("COMMIT");
+    dire(`${m} accueil(s) mis en file`);
+    return;
+  }
+
   const COMPTE = process.env.CLOUDFLARE_ACCOUNT_ID;
   const JETON = process.env.CLOUDFLARE_API_TOKEN;
   const BASE = process.env.VIGIE_D1;
@@ -514,11 +650,6 @@ async function semer() {
   //    Les domaines qui citent VOS concurrents directs sont ceux qui peuvent vous citer.
   //    Ceux qui citent un geant du secteur sont, pour l essentiel, des sites de finance
   //    generalistes qui ne citeront jamais un petit outil : ils passent en dernier.
-  const prioritaires = String(arg("prioritaires", "") || "")
-    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-  const massives = String(arg("massives", "tradingview.com,myfxbook.com"))
-    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-
   const parVoisin = new Map();
   for (const l of d.result?.[0]?.results || []) {
     const v = l.domaine_src;
@@ -537,14 +668,6 @@ async function semer() {
     `${parVoisin.size} domaine(s) voisin(s) a semer : ` +
       `${compte[1] || 0} prioritaire(s), ${compte[2] || 0} de concurrents, ${compte[5] || 0} de sites massifs`
   );
-
-  // Les chemins ou vivent les liens sortants, tentes directement : un annuaire ne met
-  // pas ses fiches sur son accueil, et aucun moteur ne les indexe.
-  const CHEMINS = [
-    "/blog", "/blog/", "/tools", "/outils", "/partners", "/partenaires", "/integrations",
-    "/reviews", "/avis", "/resources", "/ressources", "/directory", "/annuaire",
-    "/comparison", "/alternatives", "/best-trading-journals", "/trading-tools",
-  ];
 
   let n = 0;
   bd.exec("BEGIN");
