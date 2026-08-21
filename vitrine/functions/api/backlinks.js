@@ -82,11 +82,33 @@ export async function onRequestGet({ request, env }) {
     .bind(cible)
     .all();
 
-  const [mentions, murs] = await Promise.all([
-    bd.prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = ? ORDER BY url LIMIT 150")
+  // ⛔ LES SITES QUE VOUS CITEZ NE SONT PAS DES BACKLINKS, ET LES MELANGER MENT.
+  //    Les candidats d origine « reciproque » sont les sites que la CIBLE cite elle-meme :
+  //    le robot allait verifier s ils rendent le lien. Affiches sous le titre « Backlinks
+  //    de … », ils se lisent comme des liens acquis. Mesure du 21/08/2026 : 42 des 96
+  //    candidats etaient de cette origine, dont 10 visibles a l ecran.
+  //    Ils sortent donc dans leur propre onglet, qui dit ce qu ils sont : des liens a
+  //    reclamer.
+  const [mentions, murs, reciprocite, comptes] = await Promise.all([
+    bd.prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = ? AND origine NOT LIKE 'reciproque%' ORDER BY url LIMIT 150")
       .bind(cible, "mention").all(),
-    bd.prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = ? ORDER BY url LIMIT 100")
+    bd.prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = ? AND origine NOT LIKE 'reciproque%' ORDER BY url LIMIT 100")
       .bind(cible, "mur").all(),
+    bd.prepare("SELECT url, origine, etat FROM candidats WHERE cible = ? AND origine LIKE 'reciproque%' ORDER BY etat, url LIMIT 120")
+      .bind(cible).all(),
+    // ⛔ LE COMPTE DE DOMAINES SE FAIT EN BASE, PAS EN ADDITIONNANT DEUX LISTES.
+    //    L interface faisait « domaines lus + domaines annonces » alors que le tableau,
+    //    lui, dedoublonne les seconds contre les premiers : le compteur n etait jamais
+    //    egal au nombre de lignes affichees juste dessous. Sur un domaine mesure,
+    //    29 annonces pour 19 domaines reels, soit 53 % de trop.
+    bd.prepare(
+      `SELECT
+         (SELECT COUNT(DISTINCT domaine_src) FROM backlinks WHERE cible = ?1) AS domaines_lus,
+         (SELECT COUNT(*) FROM referents WHERE cible = ?1) AS annonces,
+         (SELECT COUNT(*) FROM (
+            SELECT domaine_src FROM backlinks WHERE cible = ?1
+            UNION SELECT domaine_src FROM referents WHERE cible = ?1)) AS domaines_distincts`
+    ).bind(cible).first(),
   ]);
 
   return json({
@@ -104,6 +126,8 @@ export async function onRequestGet({ request, env }) {
       "et chaque domaine confirme passe dans le tableau des liens lus.",
     mentions: mentions.results || [],
     murs: murs.results || [],
+    reciprocite: reciprocite.results || [],
+    comptes,
     robot: etat,
     // La phrase que l'interface doit reprendre telle quelle. Elle dit ce que ce
     // nombre est, et surtout ce qu'il n'est pas.

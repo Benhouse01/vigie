@@ -752,6 +752,42 @@ function tableauMentions(b){
     '<th style="text-align:right">Trouvée par</th></tr></thead><tbody>' + lignes + '</tbody></table></div>';
 }
 
+/*
+   ⛔ LES SITES QUE VOUS CITEZ NE SONT PAS DES BACKLINKS, ET LES MELANGER MENT.
+      Ces lignes viennent de la source « reciproque » : ce sont les sites que la cible
+      cite ELLE-MEME, que le robot va voir pour savoir s ils rendent le lien. Affichees
+      sous le titre « Backlinks de … » et sous une note qui dit « elles portent peut-etre
+      un lien », elles se lisaient comme des liens acquis. Un utilisateur y a lu qu il
+      avait deja un lien chez un partenaire alors qu il n en avait aucun.
+      Elles ont donc leur propre onglet, qui dit ce qu elles sont : une liste de gens a
+      qui demander un lien, pas une liste de liens obtenus.
+*/
+function tableauReciprocite(b){
+  var VERDICT = {
+    lu:      ['oui', 'suivi'],
+    vide:    ['non', 'nonsuivi'],
+    mention: ['vous cite sans lien', 'ugc'],
+    mur:     ['pas pu vérifier', 'ugc'],
+    attente: ['pas encore vérifié', 'nonsuivi'],
+  };
+  var lignes = (b.reciprocite || []).map(function(m){
+    var dom = m.url;
+    try { dom = new URL(m.url).hostname.replace(/^www\./, ''); } catch(e){}
+    var v = VERDICT[m.etat] || [ech(m.etat), 'nonsuivi'];
+    return '<tr><td><span class="dom">' + ech(dom) + '</span>' +
+      '<a class="url" href="' + ech(m.url) + '" target="_blank" rel="noopener nofollow">' +
+      ech(m.url) + '</a></td>' +
+      '<td><span class="puce ' + v[1] + '">' + v[0] + '</span></td></tr>';
+  }).join('');
+  var note = '<div class="sources"><p class="n" style="margin:0"><b>Ce ne sont pas vos ' +
+    'backlinks, ce sont vos liens sortants.</b> Vous citez ces sites ; le robot est allé ' +
+    'voir s’ils vous rendent le lien. C’est la liste la plus utile pour aller en chercher : ' +
+    'un partenaire que vous citez déjà accepte bien plus souvent qu’un inconnu.</p></div>';
+  if (!lignes) return note + '<div class="vide">Aucun lien sortant relevé pour l’instant.</div>';
+  return note + '<div class="tableau"><table><thead><tr><th>Site que vous citez</th>' +
+    '<th>Vous rend le lien ?</th></tr></thead><tbody>' + lignes + '</tbody></table></div>';
+}
+
 function tableauMurs(b){
   var lignes = (b.murs || []).map(function(m){
     var dom = '';
@@ -762,8 +798,8 @@ function tableauMurs(b){
   }).join('');
   var note = '<div class="sources"><p class="n" style="margin:0">\u25B2 Ces pages <b>n’ont pas pu être ' +
     'ouvertes</b> : un 403, un contrôle anti-robot, un délai dépassé, ou un <code>robots.txt</code> ' +
-    'qui nous l’interdit et que le robot respecte. Elles portent peut-être un lien, on ne le sait ' +
-    'pas. Les compter comme zéro transformerait nos propres blocages en jugement sur les autres.</p></div>';
+    'qui nous l’interdit et que le robot respecte. On ne sait donc pas si elles vous citent. ' +
+    'Les compter comme zéro transformerait nos propres blocages en jugement sur les autres.</p></div>';
   if (!lignes) return note + '<div class="vide">Aucun mur rencontré.</div>';
   return note + '<div class="tableau"><table><thead><tr><th>Page non ouverte</th>' +
     '<th style="text-align:right">Trouvée par</th></tr></thead><tbody>' + lignes + '</tbody></table></div>';
@@ -824,6 +860,7 @@ function dessinerBacklinks(){
     corps = etatBl.onglet === 'domaines' ? tableauDomaines(b)
          : etatBl.onglet === 'mentions' ? tableauMentions(b)
          : etatBl.onglet === 'murs' ? tableauMurs(b)
+         : etatBl.onglet === 'reciprocite' ? tableauReciprocite(b)
          : tableauLiens(b);
   }
 
@@ -839,7 +876,11 @@ function dessinerBacklinks(){
       panneauSources(robot) +
       '<div class="chiffres">' +
         chiffre(nb(total), 'liens confirmés') +
-        chiffre(nb((b.domaines || []).length + (b.referents_annonces || []).length), 'domaines référents') +
+        /* ⛔ LE COMPTE VIENT DE LA BASE, PAS D UNE ADDITION DE DEUX LISTES.
+           Additionner « domaines lus » et « domaines annonces » comptait deux fois
+           ceux qui sont dans les deux, alors que le tableau juste dessous les
+           dedoublonne : 29 affiches pour 19 lignes reelles, soit 53 % de trop. */
+        chiffre(nb(b.comptes ? b.comptes.domaines_distincts : (b.domaines || []).length), 'domaines référents') +
         chiffre(partSuivis === null ? '—' : partSuivis + ' %', 'en dofollow') +
         chiffre(nb(robot ? robot.pages_lues : 0), 'pages ouvertes') +
       '</div>' +
@@ -847,6 +888,7 @@ function dessinerBacklinks(){
         '<button class="onglet" data-o="domaines" aria-selected="' + (etatBl.onglet === 'domaines') + '">Domaines référents</button>' +
         '<button class="onglet" data-o="liens" aria-selected="' + (etatBl.onglet === 'liens') + '">Tous les liens</button>' +
         '<button class="onglet" data-o="mentions" aria-selected="' + (etatBl.onglet === 'mentions') + '">Mentions sans lien (' + nb((b.mentions || []).length) + ')</button>' +
+        '<button class="onglet" data-o="reciprocite" aria-selected="' + (etatBl.onglet === 'reciprocite') + '">Liens à réclamer (' + nb((b.reciprocite || []).length) + ')</button>' +
         '<button class="onglet" data-o="murs" aria-selected="' + (etatBl.onglet === 'murs') + '">\u25B2 Non ouvertes (' + nb((b.murs || []).length) + ')</button>' +
         '<span class="filtres"><select id="bl-rel" aria-label="filtrer par attribut rel">' +
           '<option value=""' + (etatBl.rel === '' ? ' selected' : '') + '>tous les liens</option>' +

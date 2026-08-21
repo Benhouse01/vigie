@@ -139,6 +139,37 @@ export async function tracer(bd, { compte, email, action, cible, pays, detail })
   }
 }
 
+/**
+ * Ce lien pointe-t-il VRAIMENT vers la cible ?
+ *
+ * ⛔ LE PIEGE, MESURE LE 21/08/2026 : quatre liens comptes comme des backlinks de
+ *    exemple.com pointaient en realite vers ahrefs.com, moz.com, similarweb.com et
+ *    reddit.com. Le domaine cible y figurait, mais dans la CHAINE DE REQUETE :
+ *    « ahrefs.com/website-authority-checker/?input=exemple.com ». Ce sont des liens
+ *    vers des outils d analyse DU domaine, pas des liens vers le domaine.
+ *
+ *    La regle : la cible doit etre l HOTE du lien, ou figurer dans son CHEMIN quand
+ *    le lien passe par une passerelle de redirection (« /out/exemple.com/... »,
+ *    « /startups/exemple/visit »). Jamais dans la seule chaine de requete.
+ *    Une passerelle est un vrai backlink : elle mene bien chez vous, elle est juste
+ *    emballee. Un lien de recherche ne mene nulle part chez vous.
+ */
+export function destinationVraie(url, cible) {
+  let u;
+  try { u = new URL(url); } catch { return { vrai: false, pourquoi: "url illisible" }; }
+  const hote = u.hostname.toLowerCase().replace(/^www\./, "");
+  if (memeSite(hote, cible)) return { vrai: true, passerelle: false };
+  if (u.pathname.toLowerCase().includes(cible.toLowerCase())) {
+    return { vrai: true, passerelle: true };
+  }
+  // Une passerelle peut nommer la marque sans le suffixe : /startups/exemple/visit
+  const marque = cible.split(".")[0].toLowerCase();
+  if (marque.length >= 4 && u.pathname.toLowerCase().includes(marque)) {
+    return { vrai: true, passerelle: true };
+  }
+  return { vrai: false, pourquoi: "la cible n est que dans la chaine de requete" };
+}
+
 /* ------------------------------------------------- lire un lien dans du HTML */
 
 export const AGENT =

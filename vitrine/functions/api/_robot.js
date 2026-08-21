@@ -16,7 +16,7 @@
 
 import {
   MAINTENANT, domaineDe, memeSite, liensVers, qualifierRel,
-  reglesRobots, cheminAutorise, ouvrirPage,
+  reglesRobots, cheminAutorise, ouvrirPage, destinationVraie,
 } from "./_commun.js";
 import { trouverCandidats } from "./_decouverte.js";
 
@@ -294,9 +294,13 @@ export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOU
     for (const t of trouves) {
       let absolue;
       try { absolue = new URL(t.url, page.url).toString(); } catch { continue; }
-      const dest = domaineDe(absolue);
-      if (!dest || !memeSite(dest, cible)) continue;
-      retenus.push({ ...t, url: absolue });
+      // ⛔ LA CIBLE DOIT ETRE L HOTE OU LE CHEMIN, JAMAIS LA SEULE CHAINE DE REQUETE.
+      //    Sans ce controle, « ahrefs.com/...?input=exemple.com » entrait comme un
+      //    backlink de exemple.com : c est un lien vers un outil d analyse, pas vers le
+      //    site. Quatre lignes de ce genre ont ete comptees avant que l audit les voie.
+      const verdict = destinationVraie(absolue, cible);
+      if (!verdict.vrai) continue;
+      retenus.push({ ...t, url: absolue, passerelle: verdict.passerelle });
     }
 
     if (retenus.length) {
