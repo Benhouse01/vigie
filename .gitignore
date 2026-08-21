@@ -1,0 +1,41 @@
+# Vos donnees et votre configuration : ils ne regardent que vous.
+config/domaines.json
+config/lexiques.json
+donnees/
+site/*.html
+.cache/
+.env
+.env.*
+!.env.exemple
+
+# ⛔ TOUT DOSSIER DE DONNEES, PAS SEULEMENT « donnees/ ». Un dossier « donnees-test »
+#    laisse par une passe de mise au point (VIGIE_DONNEES=./donnees-test) etait sur le
+#    point de partir sur GitHub le 21/08/2026 : il n'etait couvert par aucune regle, et
+#    aucun code ne le nomme, donc rien ne l'aurait signale. Le journal d'observations
+#    porte les domaines que vous surveillez ; il ne se publie pas.
+donnees*/
+*.jsonl
+
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.tmp
+*.avant-purge-*
+
+# ⛔ CACHES DES OUTILS DE DEPLOIEMENT, ET CELUI-CI A DEJA MORDU. Wrangler ecrit
+#    l'identifiant de VOTRE compte Cloudflare EN CLAIR dans .wrangler/cache/pages.json,
+#    et il le REECRIT a chaque deploiement. Constate le 21/08/2026 : le fichier est
+#    reapparu pendant la relecture de securite, apres un simple deploiement de la
+#    vitrine. Les trois formes ci-dessous couvrent la racine et n'importe quel
+#    sous-dossier, parce que wrangler se lance depuis le dossier du site.
+.wrangler/
+**/.wrangler/
+**/cache/pages.json
+.vercel/
+.netlify/
+
+# Le cache des collecteurs : listes de plusieurs centaines de Mo, et il porte la trace
+# des domaines que vous surveillez.
+outils/.cache/
+**/.cache/

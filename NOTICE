@@ -1,0 +1,18 @@
+Vigie
+Copyright 2026 les contributeurs du projet Vigie
+
+Ce produit inclut du logiciel developpe par les contributeurs du projet Vigie.
+
+Vigie interroge des sources publiques et gratuites. Elles ont leurs propres conditions
+d'utilisation, qui ne sont pas couvertes par cette licence et qu'il vous appartient de
+respecter :
+
+  Common Crawl          https://commoncrawl.org/terms-of-use
+  Tranco                https://tranco-list.eu/
+  Majestic Million      https://majestic.com/reports/majestic-million
+  Open PageRank         https://www.domcop.com/openpagerank/
+  Bing Webmaster Tools  https://www.bing.com/webmasters
+  Google Search Console https://search.google.com/search-console
+
+Le robot de recherche de backlinks lit le robots.txt de chaque hote et le respecte.
+Ne modifiez pas ce comportement.

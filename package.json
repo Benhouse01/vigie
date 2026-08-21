@@ -1,0 +1,35 @@
+{
+  "name": "vigie",
+  "version": "1.0.0",
+  "description": "Analyse SEO libre : backlinks, positions, trafic estime et note d autorite, pour votre site et vos concurrents. Sans abonnement et sans API payante.",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node outils/note.mjs --test",
+    "premiere-passe": "node outils/collecte-domaine.mjs && node outils/collecte-tranco-liste.mjs && node outils/note.mjs && node outils/site.mjs",
+    "site": "node outils/site.mjs",
+    "serveur": "node outils/serveur-vigie.mjs",
+    "deployer": "node outils/deployer.mjs"
+  },
+  "keywords": [
+    "seo",
+    "backlinks",
+    "netlinking",
+    "crawler",
+    "open-source",
+    "semrush-alternative",
+    "ahrefs-alternative"
+  ],
+  "files": [
+    "outils",
+    "config",
+    "site",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ]
+}

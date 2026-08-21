@@ -1,0 +1,31 @@
+# Le robot de Vigie : un Worker reveille par un declencheur horaire.
+#
+# ⛔ CLE_ROBOT n'est PAS ici. C'est un secret, il se pose une fois par :
+#      npx wrangler secret put CLE_ROBOT
+#    Une cle poussee sur GitHub est aspiree par des robots en quelques minutes, et
+#    l'historique la garde meme retiree au commit suivant.
+
+name = "vigie-robot"
+main = "index.js"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+# Toutes les deux minutes. Un tour ouvre au plus 18 pages, ce qui fait environ
+# 13 000 pages par jour, gratuitement, sans machine allumee nulle part.
+[triggers]
+crons = ["*/2 * * * *"]
+
+[[d1_databases]]
+binding = "vigie"
+database_name = "vigie"
+# ⛔ CE database_id EST CELUI DE LA BASE PUBLIQUE DE vigie-seo.pages.dev, pas un secret :
+#    il ne donne acces a rien sans le jeton d API du compte. Si vous forkez, creez la
+#    votre et remplacez-le ICI ET DANS L AUTRE wrangler.toml, sinon votre deploiement
+#    echouera en accusant votre configuration alors qu il vise la base de quelqu un d autre :
+#      npx wrangler d1 create vigie
+#    Le Worker et les Pages Functions lisent et ecrivent LA MEME base.
+database_id = "61239ae4-e2ab-403c-a764-e06523592bbd"
+
+[observability]
+enabled = true

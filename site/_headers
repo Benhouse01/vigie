@@ -1,0 +1,21 @@
+# EN-TETES DE TOUT LE SITE DE LA VIGIE.
+#
+# ⛔ CES REGLES NE S'APPLIQUENT QU'AUX FICHIERS SERVIS PAR LE CDN. Une reponse fabriquee
+#    par functions/_middleware.js ne passe pas par ici : c'est pourquoi le middleware
+#    repose lui-meme les memes en-tetes sur la reponse qu'il laisse sortir. Les deux
+#    endroits doivent rester d'accord.
+#
+# ⛔ ET AUCUN DE CES EN-TETES NE PROTEGE QUOI QUE CE SOIT. Un noindex est une demande
+#    polie adressee a des robots polis. La seule protection reelle est le mot de passe
+#    pose par le middleware. Ne remplacez jamais l'un par l'autre.
+
+/*
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'

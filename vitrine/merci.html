@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Merci — Vigie</title>
+<meta name="robots" content="noindex">
+<style>
+:root{color-scheme:light;--fond:#f7f7f5;--carte:#fff;--bord:#e4e2dc;--texte:#14140f;--texte2:#54524b;
+  --doux:#7b786f;--accent:#eb6834;--bleu:#2a78d6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --fond:#131316;--carte:#1b1b1f;--bord:#2f2f36;--texte:#f2f1ee;--texte2:#b9b7b0;--doux:#8d8a83;
+  --accent:#d95926;--bleu:#3987e5}}
+body{margin:0;background:var(--fond);color:var(--texte);min-height:100vh;display:grid;place-items:center;
+  font:16px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:24px}
+.boite{max-width:560px;background:var(--carte);border:1px solid var(--bord);border-radius:14px;padding:38px 34px;
+  box-shadow:0 1px 2px rgba(0,0,0,.05),0 6px 22px rgba(0,0,0,.06)}
+h1{font-size:30px;letter-spacing:-1px;margin:0 0 14px}
+p{color:var(--texte2);margin:0 0 14px}
+a.bouton{display:inline-block;margin-top:12px;background:var(--texte);color:var(--fond);text-decoration:none;
+  padding:11px 20px;border-radius:999px;font-weight:620;font-size:15px}
+.oeil{width:26px;height:26px;border-radius:9px;display:inline-block;vertical-align:-5px;margin-right:9px;
+  background:linear-gradient(140deg,var(--accent),var(--bleu))}
+</style>
+</head>
+<body>
+<div class="boite">
+  <h1><span class="oeil"></span>Merci.</h1>
+  <p>Votre don part directement dans le temps passé à faire vivre l'outil : suivre les moteurs qui
+  changent, ajouter des sources, réparer ce qui casse.</p>
+  <p><strong>Rien ne change dans votre compte</strong>, et c'est voulu. Aucun don n'ouvre de
+  fonctionnalité : ce serait un abonnement déguisé, et c'est exactement ce que cet outil refuse
+  d'être.</p>
+  <p>Si vous savez coder, une contribution vaut encore mieux qu'un don. Le dépôt est ouvert.</p>
+  <a class="bouton" href="/">Revenir à l'outil</a>
+</div>
+</body>
+</html>

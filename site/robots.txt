@@ -1,0 +1,4 @@
+# Le site est prive et protege par mot de passe. Ce fichier n'est qu'une politesse
+# supplementaire : sans le mot de passe, aucun robot n'atteindra meme cette ligne.
+User-agent: *
+Disallow: /

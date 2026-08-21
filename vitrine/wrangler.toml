@@ -1,0 +1,23 @@
+# Configuration Cloudflare Pages de la vitrine.
+#
+# ⛔ AUCUN SECRET ICI. Les variables (VIGIE_ADMINS et le reste) se posent dans le tableau
+#    de bord Cloudflare, ou par npx wrangler pages secret put, jamais dans le depot.
+#
+# ⛔ Les variables de PREVIEW sont un jeu DISTINCT de celles de PRODUCTION chez
+#    Cloudflare. Une preversion sans base est une preversion qui tombe en 503, et son
+#    URL est aussi previsible que celle de la production.
+
+name = "vigie-seo"
+pages_build_output_dir = "."
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "vigie"
+database_name = "vigie"
+# ⛔ CE database_id EST CELUI DE LA BASE PUBLIQUE DE vigie-seo.pages.dev, pas un secret :
+#    il ne donne acces a rien sans le jeton d API du compte. Si vous forkez, creez la
+#    votre et remplacez-le ICI ET DANS L AUTRE wrangler.toml, sinon votre deploiement
+#    echouera en accusant votre configuration alors qu il vise la base de quelqu un d autre :
+#      npx wrangler d1 create vigie
+database_id = "61239ae4-e2ab-403c-a764-e06523592bbd"

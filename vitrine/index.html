@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vigie — analyse SEO et backlinks, gratuit et libre</title>
+<meta name="description" content="Backlinks, santé technique, indexabilité, popularité, pour n'importe quel domaine et pour vos concurrents. Un robot ouvre les pages et lit chaque lien pour de vrai. Gratuit, libre en AGPL, sans abonnement.">
+<meta property="og:title" content="Vigie — analyse SEO et backlinks, gratuit et libre">
+<meta property="og:description" content="Tapez un domaine, lancez le robot, voyez chaque lien avec son rel réel. Gratuit, sans abonnement. Le code est libre et s'améliore avec ceux qui l'utilisent.">
+<meta property="og:type" content="website">
+<style>
+:root{
+  color-scheme: light;
+  --fond:#f7f7f5; --carte:#ffffff; --carte2:#fbfbf9;
+  --bord:#e4e2dc; --bord-fort:#cfccc4;
+  --texte:#14140f; --texte2:#54524b; --doux:#7b786f;
+  --accent:#eb6834; --bleu:#2a78d6;
+  --ok:#116b40; --ok-fond:#e4f3ea;
+  --attention:#7d6110; --attention-fond:#faf1d8;
+  --grave:#96331a; --grave-fond:#fbe9e3;
+  --neutre:#efeeea;
+  --ombre:0 1px 2px rgba(20,20,15,.05), 0 4px 14px rgba(20,20,15,.045);
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --fond:#131316; --carte:#1b1b1f; --carte2:#202025;
+    --bord:#2f2f36; --bord-fort:#43434c;
+    --texte:#f2f1ee; --texte2:#b9b7b0; --doux:#8d8a83;
+    --accent:#d95926; --bleu:#3987e5;
+    --ok:#4cc389; --ok-fond:#13301f;
+    --attention:#d8b755; --attention-fond:#2f2712;
+    --grave:#ea8a6d; --grave-fond:#331a12;
+    --neutre:#26262c;
+    --ombre:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+  }
+}
+*{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden}
+body{margin:0;background:var(--fond);color:var(--texte);
+  font:16px/1.65 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.env{max-width:1080px;margin:0 auto;padding:0 22px}
+a{color:var(--bleu)}
+
+.barre{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--fond) 88%,transparent);
+  backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--bord)}
+.barre .env{display:flex;align-items:center;gap:14px;min-height:60px}
+.marque{display:flex;align-items:center;gap:10px;font-weight:660;letter-spacing:-.2px;text-decoration:none;color:inherit}
+.oeil{width:24px;height:24px;border-radius:8px;flex:none;
+  background:linear-gradient(140deg,var(--accent),var(--bleu));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.barre nav{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.barre nav a{color:var(--texte2);text-decoration:none;font-size:14px;padding:7px 12px;border-radius:999px}
+.barre nav a:hover{background:var(--neutre);color:var(--texte)}
+.barre .moi{font-size:13.5px;color:var(--doux);display:flex;align-items:center;gap:8px;padding-left:6px}
+.barre .moi b{color:var(--texte2);font-weight:600}
+
+.bouton{display:inline-block;background:var(--texte);color:var(--fond);text-decoration:none;
+  padding:11px 20px;border-radius:999px;font-weight:620;font-size:15px;border:1px solid var(--texte);cursor:pointer;
+  font-family:inherit;text-align:center}
+.bouton:hover{opacity:.88}
+.bouton:disabled{opacity:.45;cursor:default}
+.bouton.creux{background:transparent;color:var(--texte);border-color:var(--bord-fort)}
+.bouton.petit{padding:8px 15px;font-size:13.5px}
+.lien-nu{background:none;border:none;color:var(--bleu);cursor:pointer;font:inherit;font-size:13.5px;padding:0;
+  text-decoration:underline}
+
+header.hero{padding:56px 0 20px}
+h1{font-size:clamp(30px,5.2vw,50px);line-height:1.07;letter-spacing:-1.5px;margin:0 0 18px;font-weight:700}
+h1 .sur{color:var(--accent)}
+.chapeau{font-size:clamp(17px,2.2vw,19px);color:var(--texte2);max-width:62ch;margin:0 0 28px}
+
+form.analyse{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  background:var(--carte);border:1px solid var(--bord-fort);border-radius:999px;
+  padding:8px 8px 8px 20px;box-shadow:var(--ombre);max-width:640px}
+form.analyse input{flex:1;min-width:190px;border:none;background:none;color:var(--texte);
+  font:17px/1.5 inherit;padding:8px 0;outline:none}
+form.analyse input::placeholder{color:var(--doux)}
+.aide{color:var(--doux);font-size:13.5px;margin-top:12px}
+.don{margin-top:18px;font-size:15px;color:var(--texte2)}
+.don a{font-weight:600}
+
+section{padding:46px 0;border-top:1px solid var(--bord)}
+h2{font-size:clamp(22px,3vw,29px);letter-spacing:-.7px;margin:0 0 8px;font-weight:680}
+.sous{color:var(--texte2);margin:0 0 24px;max-width:70ch}
+h3{font-size:17px;margin:0 0 8px;letter-spacing:-.2px}
+
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:16px}
+.carte{background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);
+  padding:20px 21px;box-shadow:var(--ombre)}
+.carte p{color:var(--texte2);margin:0;font-size:15px}
+.carte .ic{font-size:20px;margin-bottom:10px;display:block}
+
+/* le portillon du compte */
+.portillon{background:var(--carte);border:1px solid var(--bord-fort);border-radius:var(--r);
+  padding:24px;box-shadow:var(--ombre);margin-top:26px;max-width:520px}
+.portillon h3{font-size:19px;margin-bottom:6px}
+.portillon p.pq{color:var(--texte2);font-size:14.5px;margin:0 0 18px}
+.champs{display:grid;gap:10px}
+.champs input{width:100%;padding:12px 14px;border:1px solid var(--bord-fort);border-radius:10px;
+  background:var(--carte2);color:var(--texte);font:15px/1.4 inherit;outline:none}
+.champs input:focus{border-color:var(--bleu)}
+.portillon .actions{display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.bascule{color:var(--doux);font-size:13.5px;margin-top:14px}
+.mini{color:var(--doux);font-size:12.5px;margin-top:14px;line-height:1.55}
+
+/* resultats */
+#resultat{margin-top:30px}
+.res-tete{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.res-tete h2{margin:0}
+.res-tete .quand{color:var(--doux);font-size:13.5px}
+.score{display:flex;align-items:baseline;gap:10px;margin:6px 0 18px}
+.score .n{font-size:clamp(38px,6.4vw,52px);font-weight:700;letter-spacing:-2px;line-height:1;
+  font-variant-numeric:tabular-nums}
+.score .sur{color:var(--doux);font-size:17px}
+.mesures{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:14px}
+.mes{background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);padding:16px 18px}
+.mes .k{color:var(--doux);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:640}
+.mes .v{font-size:25px;font-weight:700;letter-spacing:-.8px;margin:6px 0 4px;line-height:1.15;
+  font-variant-numeric:tabular-nums}
+.mes .p{color:var(--texte2);font-size:13.5px;line-height:1.5}
+.mes .s{color:var(--doux);font-size:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bord)}
+.mes.angle{border-left:3px solid var(--attention)}
+.mes.angle .v{color:var(--attention);font-size:20px}
+.mes.absent{border-left:3px solid var(--doux)}
+.mes.absent .v{color:var(--doux);font-size:20px;font-style:italic}
+.bareme div{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0;color:var(--texte2)}
+.bareme .pts{font-variant-numeric:tabular-nums;color:var(--texte)}
+.erreur{background:var(--grave-fond);border:1px solid color-mix(in srgb,var(--grave) 35%,transparent);
+  color:var(--grave);border-radius:var(--r);padding:14px 17px;margin-top:16px;font-size:14.5px}
+.attente{color:var(--texte2);margin-top:22px}
+
+/* backlinks */
+.bl{margin-top:34px;background:var(--carte);border:1px solid var(--bord);border-radius:var(--r);
+  box-shadow:var(--ombre);overflow:hidden}
+.bl-tete{padding:18px 20px;border-bottom:1px solid var(--bord);display:flex;gap:16px;
+  align-items:flex-start;flex-wrap:wrap}
+.bl-tete .titre{flex:1;min-width:220px}
+.bl-tete h3{margin:0 0 3px;font-size:18px}
+.bl-tete .nature{color:var(--doux);font-size:12.5px;max-width:64ch;line-height:1.5;margin:0}
+.chiffres{display:flex;gap:28px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--bord);
+  background:var(--carte2)}
+.chiffre .n{font-size:27px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.1}
+.chiffre .l{color:var(--doux);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:640;margin-top:2px}
+.onglets{display:flex;gap:2px;padding:12px 20px 0;border-bottom:1px solid var(--bord);flex-wrap:wrap;
+  align-items:center}
+.onglet{background:none;border:none;border-bottom:2px solid transparent;color:var(--texte2);
+  font:inherit;font-size:14.5px;padding:8px 14px 10px;cursor:pointer;margin-bottom:-1px}
+.onglet[aria-selected="true"]{color:var(--texte);border-bottom-color:var(--accent);font-weight:620}
+.filtres{margin-left:auto;display:flex;gap:6px;align-items:center;padding-bottom:8px;flex-wrap:wrap}
+.filtres select{padding:6px 10px;border:1px solid var(--bord-fort);border-radius:8px;
+  background:var(--carte2);color:var(--texte);font:13.5px/1.4 inherit;outline:none}
+
+.tableau{overflow:auto;max-height:620px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+thead th{position:sticky;top:0;z-index:2;background:var(--carte2);text-align:left;
+  padding:10px 14px;border-bottom:1px solid var(--bord-fort);color:var(--doux);
+  font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:640;white-space:nowrap}
+tbody td{padding:10px 14px;border-bottom:1px solid var(--bord);vertical-align:top}
+tbody tr:hover{background:var(--carte2)}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td .dom{font-weight:600;color:var(--texte);display:block}
+td .url{display:block;color:var(--texte2);word-break:break-all;font-size:12.5px;line-height:1.45;max-width:400px}
+td .anc{color:var(--texte2);font-size:12.5px;max-width:240px;display:block;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.puce{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:640;
+  white-space:nowrap;border:1px solid transparent}
+.puce.suivi{background:var(--ok-fond);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 28%,transparent)}
+.puce.nonsuivi{background:var(--neutre);color:var(--texte2);border-color:var(--bord-fort)}
+.puce.ugc{background:var(--attention-fond);color:var(--attention);border-color:color-mix(in srgb,var(--attention) 32%,transparent)}
+.vide{padding:34px 20px;text-align:center;color:var(--texte2);max-width:64ch;margin:0 auto;line-height:1.6}
+.vide b{color:var(--texte);display:block;margin-bottom:6px;font-size:16px}
+
+.progression{padding:13px 20px;background:var(--attention-fond);border-bottom:1px solid var(--bord);
+  color:var(--attention);font-size:13.5px;display:flex;gap:10px;align-items:center;line-height:1.5}
+.progression b{color:inherit}
+.tourne{width:13px;height:13px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;
+  animation:t .8s linear infinite;flex:none}
+@keyframes t{to{transform:rotate(360deg)}}
+.progression.fini{background:var(--ok-fond);color:var(--ok)}
+.sources{padding:14px 20px;border-bottom:1px solid var(--bord);background:var(--carte)}
+.sources .t{color:var(--doux);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;
+  font-weight:640;margin-bottom:9px}
+.sources ul{list-style:none;margin:0;padding:0;display:flex;gap:7px;flex-wrap:wrap}
+.sources li{font-size:12.5px;padding:3px 10px;border-radius:999px;border:1px solid var(--bord-fort);
+  background:var(--carte2);color:var(--texte2)}
+.sources li.rend{border-color:color-mix(in srgb,var(--ok) 34%,transparent);background:var(--ok-fond);color:var(--ok)}
+.sources li.mur{border-color:color-mix(in srgb,var(--attention) 34%,transparent);
+  background:var(--attention-fond);color:var(--attention)}
+.sources .n{color:var(--doux);font-size:12px;margin:10px 0 0;line-height:1.55;max-width:74ch}
+
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:680px){.compare{grid-template-columns:1fr}}
+.compare > div{border-radius:var(--r);padding:20px 21px;border:1px solid var(--bord)}
+.eux{background:var(--grave-fond);border-color:color-mix(in srgb,var(--grave) 30%,transparent)}
+.nous{background:var(--ok-fond);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+.compare ul{margin:0;padding-left:20px}
+.compare li{margin:7px 0;font-size:15px}
+.eux h3{color:var(--grave)} .nous h3{color:var(--ok)}
+
+pre{background:var(--carte2);border:1px solid var(--bord);border-radius:10px;padding:16px 18px;
+  overflow-x:auto;font:13.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+code{font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--neutre);padding:1px 6px;border-radius:5px}
+pre code{background:none;padding:0}
+.encart{background:var(--carte);border:1px solid var(--bord);border-left:3px solid var(--attention);
+  border-radius:10px;padding:16px 19px;margin:22px 0;color:var(--texte2);font-size:15px}
+.encart strong{color:var(--texte)}
+footer{padding:40px 0 70px;border-top:1px solid var(--bord);color:var(--doux);font-size:14px}
+footer a{color:var(--texte2)}
+</style>
+</head>
+<body>
+
+<div class="barre"><div class="env">
+  <a class="marque" href="/"><span class="oeil"></span>Vigie</a>
+  <nav>
+    <a href="#pourquoi">Pourquoi</a>
+    <a href="#vivant">Le code vivant</a>
+    <a href="#soutenir">Soutenir</a>
+    <span class="moi" id="moi"></span>
+  </nav>
+</div></div>
+
+<header class="hero"><div class="env">
+  <h1>Les backlinks de n'importe quel site.<br><span class="sur">Gratuitement, et sans qu'on vous mente.</span></h1>
+  <p class="chapeau">Un robot ouvre les pages et lit chaque lien dans le HTML servi : l'URL exacte,
+  l'ancre, et le <code>rel</code> réel. Plus la santé technique, l'indexabilité et la popularité.
+  Sur votre site comme sur celui de vos concurrents.</p>
+
+  <form class="analyse" id="f">
+    <input id="d" type="text" placeholder="exemple.com" autocomplete="off" spellcheck="false"
+      aria-label="domaine à analyser">
+    <button class="bouton" id="go" type="submit">Analyser</button>
+  </form>
+  <p class="aide">Essayez avec votre site, celui d'un concurrent, ou n'importe quel domaine public.</p>
+
+  <div id="portillon"></div>
+
+  <p class="don">💛 <strong>Ce service est gratuit et le restera.</strong>
+  <a href="#soutenir">Faire un don pour nous soutenir</a> si vous voulez qu'il grandisse.</p>
+
+  <div id="resultat"></div>
+</div></header>
+
+<section id="pourquoi"><div class="env">
+  <h2>Pourquoi cet outil existe</h2>
+  <p class="sous">Les outils SEO du marché coûtent entre 100 et 500 € par mois. Pour une entreprise
+  qui démarre, c'est le budget d'un salarié à temps partiel, dépensé pour lire des chiffres.</p>
+
+  <p>Le plus gênant n'est pas le prix. C'est ce qu'on achète : des <strong>estimations présentées
+  comme des mesures</strong>. Un trafic « organique » qui est un modèle calculé, affiché à côté
+  d'un compte de backlinks qui est en réalité le plafond d'un index. Rien ne distingue, à l'écran,
+  ce qui a été compté de ce qui a été deviné.</p>
+
+  <div class="compare" style="margin-top:24px">
+    <div class="eux">
+      <h3>Ce qu'on vous vend</h3>
+      <ul>
+        <li>Un nombre de backlinks qui est le plafond d'un index</li>
+        <li>Un trafic « organique » qui est un modèle, sans le dire</li>
+        <li>Un zéro quand la mesure a échoué</li>
+        <li>Un score d'autorité calculé sur le volume de liens, donc achetable</li>
+        <li>Un abonnement, et vos données sur leurs serveurs</li>
+      </ul>
+    </div>
+    <div class="nous">
+      <h3>Ce que fait Vigie</h3>
+      <ul>
+        <li>Chaque lien montré a été lu dans le HTML servi, avec son URL</li>
+        <li>Un plafond s'affiche <code>≥</code>, jamais comme un total</li>
+        <li>Une mesure impossible s'affiche <strong>▲</strong>, jamais <code>0</code></li>
+        <li>Jamais « non qualifié » : un lien est dofollow, nofollow, ugc ou sponsored</li>
+        <li>Gratuit, et le code est lisible par tout le monde</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section id="vivant"><div class="env">
+  <h2>Un code vivant, et un index qui grossit</h2>
+  <p class="sous">Un outil SEO qui n'évolue pas meurt en six mois : les moteurs changent, les
+  sources ferment, les pièges se déplacent. Celui-ci est fait pour être amélioré par ceux qui
+  s'en servent, et son index profite à tout le monde en même temps.</p>
+
+  <div class="grille">
+    <div class="carte"><span class="ic">🔓</span><h3>Licence AGPL-3.0</h3>
+      <p>Tout le monde peut l'utiliser, le modifier, le déployer. Mais quiconque le propose en
+      service en ligne <strong>doit publier ses modifications</strong>. Personne ne pourra le
+      reprendre pour le revendre en fermé à 200 € par mois.</p></div>
+    <div class="carte"><span class="ic">🌱</span><h3>L'index est un bien commun</h3>
+      <p>Chaque crawl lancé par quelqu'un enrichit la même base. Une page qui cite un site du
+      secteur devient un candidat pour le suivant. C'est la seule source qui s'améliore toute
+      seule avec le nombre d'utilisateurs, et c'est comme ça qu'un outil gratuit rattrape un
+      abonnement.</p></div>
+    <div class="carte"><span class="ic">🧭</span><h3>Une seule règle intouchable</h3>
+      <p>Jamais un zéro là où la mesure a échoué. Une contribution qui transforme un blocage en
+      valeur nulle est refusée, même si elle rend les tableaux plus jolis.</p></div>
+    <div class="carte"><span class="ic">🩹</span><h3>Chaque piège reste écrit</h3>
+      <p>Le code porte les erreurs déjà payées, avec leur mesure et leur date. Un extracteur qui
+      ratait un lien sur deux, un plafond pris pour un total, un angle mort compté comme un zéro.</p></div>
+  </div>
+
+  <div class="encart"><strong>Le robot est poli, et ce n'est pas négociable.</strong> Il lit le
+  <code>robots.txt</code> de chaque hôte avant de l'ouvrir et le respecte. Une seule requête à la
+  fois par hôte. Un User-Agent qui s'annonce et donne un moyen de le joindre. Et des budgets qui
+  l'arrêtent. Un robot impoli fait bannir son adresse et grille les sites qu'on voulait justement
+  convaincre de nous publier.</div>
+</div></section>
+
+<section id="soutenir"><div class="env">
+  <h2>Soutenir</h2>
+  <p class="sous">Le service est gratuit et le restera. Il n'y aura jamais d'abonnement, jamais de
+  fonctionnalité rançonnée, jamais de revente de vos données.</p>
+  <p>Ce qui coûte, c'est le temps passé à le faire vivre : suivre les moteurs qui changent, ajouter
+  des sources, réparer ce qui casse. Si l'outil vous rend service, un don aide à ce qu'il grandisse.
+  Et si vous savez coder, une contribution vaut mieux qu'un don.</p>
+  <p style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+    <a class="bouton" id="lien-don" href="https://buy.stripe.com/cNi6oIepEgck8pF7q59R600"
+       target="_blank" rel="noopener">Faire un don</a>
+    <a class="bouton creux" id="lien-code" href="https://github.com/Benhouse01/vigie"
+       target="_blank" rel="noopener">Voir le code</a>
+  </p>
+  <p class="aide">Aucun don n'ouvre de fonctionnalité. Ce serait un abonnement déguisé.</p>
+</div></section>
+
+<footer><div class="env">
+  <p><strong>Vigie</strong> — logiciel libre sous licence AGPL-3.0.</p>
+  <p>Le seul principe non négociable : <strong>jamais un zéro là où la mesure a échoué.</strong></p>
+</div></footer>
+
+<script>
+(function(){
+"use strict";
+
+var f = document.getElementById('f');
+var champ = document.getElementById('d');
+var go = document.getElementById('go');
+var out = document.getElementById('resultat');
+var boitePortillon = document.getElementById('portillon');
+var barreMoi = document.getElementById('moi');
+
+var moi = null;
+var minuterie = null;
+var modeCompte = 'inscription';
+
+/* ------------------------------------------------------------- utilitaires */
+
+function ech(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function nb(n){ return (n === null || n === undefined) ? '—' : Number(n).toLocaleString('fr-FR'); }
+
+async function api(chemin, options){
+  var r, d;
+  try { r = await fetch(chemin, Object.assign({ credentials:'same-origin' }, options || {})); }
+  catch(e){ return { ok:false, statut:0, d:{ erreur:'réseau injoignable' } }; }
+  try { d = await r.json(); } catch(e){ d = { erreur:'réponse illisible du serveur' }; }
+  return { ok:r.ok, statut:r.status, d:d };
+}
+
+/* ----------------------------------------------------------------- compte */
+
+/*
+   ⛔ L'ETIREMENT DU MOT DE PASSE SE FAIT ICI, DANS LE NAVIGATEUR.
+   Le palier gratuit de Cloudflare accorde dix millisecondes de processeur par requete ;
+   un PBKDF2 serieux en coute cent. Le serveur ne verra donc jamais le mot de passe,
+   seulement cette derivee, qu'il resale et hache a son tour. Un vol de la base ne rend
+   pas les mots de passe : pour en tester un seul, il faut refaire ces 210 000 tours.
+*/
+async function deriver(email, motdepasse){
+  var enc = new TextEncoder();
+  var cle = await crypto.subtle.importKey('raw', enc.encode(motdepasse), 'PBKDF2', false, ['deriveBits']);
+  var bits = await crypto.subtle.deriveBits(
+    { name:'PBKDF2', salt: enc.encode('vigie|' + email), iterations:210000, hash:'SHA-256' },
+    cle, 256
+  );
+  return Array.prototype.map.call(new Uint8Array(bits), function(o){
+    return o.toString(16).padStart(2,'0');
+  }).join('');
+}
+
+async function relireCompte(){
+  var r = await api('/api/compte');
+  moi = (r.d && r.d.connecte) ? r.d : null;
+  dessinerBarre();
+  dessinerPortillon();
+}
+
+function dessinerBarre(){
+  if (!moi){ barreMoi.innerHTML = ''; return; }
+  barreMoi.innerHTML = '<b>' + ech(moi.email) + '</b>' +
+    (moi.admin ? ' <a href="/admin.html">tableau</a>' : '') +
+    ' <button class="lien-nu" id="sortir">sortir</button>';
+  document.getElementById('sortir').onclick = async function(){
+    await api('/api/compte', { method:'POST', headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({ action:'deconnexion' }) });
+    moi = null; arreterSuivi(); out.innerHTML = ''; dessinerBarre(); dessinerPortillon();
+  };
+}
+
+function dessinerPortillon(){
+  if (moi){ boitePortillon.innerHTML = ''; return; }
+  var inscription = modeCompte === 'inscription';
+  boitePortillon.innerHTML =
+    '<div class="portillon">' +
+      '<h3>' + (inscription ? 'Créez votre compte, c’est gratuit' : 'Connectez-vous') + '</h3>' +
+      '<p class="pq">Le robot ouvre de vraies pages chez de vrais gens. Savoir qui demande quoi est ' +
+        'ce qui permet de couper un abus sans couper le service pour tout le monde. Une adresse ' +
+        'email suffit.</p>' +
+      '<div class="champs">' +
+        '<input id="c-mail" type="email" placeholder="vous@exemple.com" autocomplete="email">' +
+        '<input id="c-mdp" type="password" placeholder="mot de passe, huit caractères minimum" ' +
+          'autocomplete="' + (inscription ? 'new-password' : 'current-password') + '">' +
+      '</div>' +
+      '<div class="actions">' +
+        '<button class="bouton" id="c-go">' + (inscription ? 'Créer mon compte' : 'Se connecter') + '</button>' +
+        '<span id="c-etat" style="font-size:13.5px;color:var(--doux)"></span>' +
+      '</div>' +
+      '<p class="bascule">' + (inscription ? 'Déjà un compte ? ' : 'Pas encore de compte ? ') +
+        '<button class="lien-nu" id="c-bascule">' + (inscription ? 'Se connecter' : 'En créer un') + '</button></p>' +
+      '<p class="mini">Aucune carte bancaire, aucun essai qui expire, aucune revente. Votre mot de ' +
+        'passe ne quitte jamais ce navigateur : il y est transformé avant d’être envoyé.</p>' +
+    '</div>';
+
+  document.getElementById('c-bascule').onclick = function(){
+    modeCompte = inscription ? 'connexion' : 'inscription';
+    dessinerPortillon();
+    var m = document.getElementById('c-mail'); if (m) m.focus();
+  };
+
+  var bouton = document.getElementById('c-go');
+  var etat = document.getElementById('c-etat');
+  var mail = document.getElementById('c-mail');
+  var mdp = document.getElementById('c-mdp');
+
+  async function envoyer(){
+    var e = (mail.value || '').trim().toLowerCase();
+    var p = mdp.value || '';
+    if (e.indexOf('@') < 1 || e.indexOf('.') < 0){ etat.textContent = 'Adresse email incomplète.'; return; }
+    if (p.length < 8){ etat.textContent = 'Huit caractères minimum.'; return; }
+    bouton.disabled = true;
+    etat.textContent = 'préparation du mot de passe…';
+    var derivee;
+    try { derivee = await deriver(e, p); }
+    catch(err){
+      etat.textContent = 'ce navigateur n’a pas pu préparer le mot de passe';
+      bouton.disabled = false; return;
+    }
+    etat.textContent = 'envoi…';
+    var r = await api('/api/compte', { method:'POST', headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({ action: modeCompte, email:e, derivee:derivee }) });
+    if (!r.ok){
+      etat.textContent = (r.d && r.d.erreur) || 'échec';
+      bouton.disabled = false;
+      return;
+    }
+    await relireCompte();
+    if (champ.value.trim()) lancerAnalyse();
+  }
+
+  bouton.onclick = envoyer;
+  mdp.onkeydown = function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); envoyer(); } };
+  mail.onkeydown = function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); mdp.focus(); } };
+}
+
+/* ---------------------------------------------------------------- analyse */
+
+var LIBELLES = {
+  reponse_http: 'Réponse HTTP',
+  poids_accueil: 'Poids de l’accueil',
+  robots_bloque_tout: 'robots.txt',
+  pages_au_sitemap: 'Pages au sitemap',
+  indexable: 'Accueil indexable',
+  liens_externes_accueil: 'Domaines liés depuis l’accueil',
+  popularite_tranco: 'Rang de popularité'
+};
+
+function valeurLisible(cle, m){
+  if (m.etat === 'ANGLE_MORT') return '▲ non mesuré';
+  if (m.etat === 'MESURE_ABSENT') return 'rien';
+  if (cle === 'poids_accueil') return Math.round(m.valeur / 1024) + ' Ko';
+  if (cle === 'robots_bloque_tout') return m.valeur ? 'bloque tout' : 'n’interdit pas tout';
+  if (cle === 'indexable') return m.valeur ? 'oui' : 'NON';
+  if (cle === 'pages_au_sitemap') return (m.plancher ? '≥ ' : '') + nb(m.valeur);
+  return nb(m.valeur);
+}
+
+function afficherAnalyse(j){
+  var r = j.resultats;
+  var st = r.sante_technique;
+  var h = '<div class="res-tete"><h2>' + ech(j.domaine) + '</h2>' +
+    '<span class="quand">mesuré à l’instant, en ' + nb(j.duree_ms) + ' ms</span></div>';
+
+  if (st && st.etat === 'MESURE'){
+    h += '<div class="score"><span class="n">' + ech(st.valeur) +
+         '</span><span class="sur">/ 100 en santé technique</span></div>';
+    if (st.detail && st.detail.length){
+      h += '<div class="mes" style="margin-bottom:18px"><div class="k">Le détail du barème</div><div class="bareme">';
+      st.detail.forEach(function(p){
+        h += '<div><span>' + ech(p.nom) + ' — <span style="color:var(--doux)">' + ech(p.dit) + '</span></span>' +
+             '<span class="pts">' + ech(p.obtenu) + ' / ' + ech(p.sur) + '</span></div>';
+      });
+      h += '</div></div>';
+    }
+  }
+
+  h += '<div class="mesures">';
+  Object.keys(LIBELLES).forEach(function(cle){
+    var m = r[cle];
+    if (!m) return;
+    var classe = m.etat === 'ANGLE_MORT' ? ' angle' : (m.etat === 'MESURE_ABSENT' ? ' absent' : '');
+    h += '<div class="mes' + classe + '">' +
+         '<div class="k">' + ech(LIBELLES[cle]) + '</div>' +
+         '<div class="v">' + valeurLisible(cle, m) + '</div>' +
+         '<div class="p">' + ech(m.preuve || '') + '</div>' +
+         '<div class="s">source : ' + ech(m.source || '?') + '</div></div>';
+  });
+  h += '</div><div id="bl"></div>';
+
+  if (j.non_mesure_ici && j.non_mesure_ici.length){
+    h += '<div class="encart"><strong>Ce que cette page ne mesure pas, et pourquoi.</strong>' +
+         '<ul style="margin:8px 0 0;padding-left:20px">';
+    j.non_mesure_ici.forEach(function(x){ h += '<li>' + ech(x) + '</li>'; });
+    h += '</ul></div>';
+  }
+  out.innerHTML = h;
+}
+
+async function lancerAnalyse(){
+  var brut = (champ.value || '').trim();
+  if (!brut) return;
+
+  if (!moi){
+    dessinerPortillon();
+    boitePortillon.scrollIntoView({ behavior:'smooth', block:'center' });
+    var m = document.getElementById('c-mail'); if (m) m.focus();
+    return;
+  }
+
+  arreterSuivi();
+  go.disabled = true;
+  out.innerHTML = '<p class="attente">Mesure en cours… on interroge le site, son robots.txt, ' +
+    'son sitemap et un panel de popularité.</p>';
+
+  var r = await api('/api/analyser?domaine=' + encodeURIComponent(brut));
+  go.disabled = false;
+
+  if (!r.ok){
+    if (r.statut === 401){
+      moi = null; dessinerBarre(); dessinerPortillon(); out.innerHTML = '';
+      boitePortillon.scrollIntoView({ behavior:'smooth', block:'center' });
+      return;
+    }
+    out.innerHTML = '<div class="erreur">' + ech((r.d && r.d.erreur) || 'refusé') + '</div>';
+    return;
+  }
+
+  afficherAnalyse(r.d);
+  etatBl = { rel:'', onglet:'domaines', page:0, donnees:null };
+  chargerBacklinks(r.d.domaine, true);
+}
+
+f.addEventListener('submit', function(e){ e.preventDefault(); lancerAnalyse(); });
+
+/* -------------------------------------------------------------- backlinks */
+
+var etatBl = { rel:'', onglet:'domaines', page:0, donnees:null };
+
+async function chargerBacklinks(cible, premier){
+  var boite = document.getElementById('bl');
+  if (!boite) return;
+  if (premier) boite.innerHTML = '<div class="bl"><div class="vide">Lecture de l’index partagé…</div></div>';
+
+  var r = await api('/api/backlinks?d=' + encodeURIComponent(cible) +
+    '&rel=' + encodeURIComponent(etatBl.rel) + '&page=' + etatBl.page);
+  if (!r.ok){
+    boite.innerHTML = '<div class="erreur">' + ech((r.d && r.d.erreur) || 'backlinks indisponibles') + '</div>';
+    return;
+  }
+  etatBl.donnees = r.d;
+  dessinerBacklinks();
+}
+
+function panneauSources(robot){
+  if (!robot || !robot.sources || !robot.sources.length) return '';
+  var puces = robot.sources.map(function(s){
+    if (s.etat === 'MESURE'){
+      return '<li class="' + (s.trouves > 0 ? 'rend' : '') + '">' + ech(s.source) + ' · ' +
+        nb(s.trouves || 0) +
+        (s.detail ? ' <span style="opacity:.75">' + ech(s.detail) + '</span>' : '') + '</li>';
+    }
+    if (s.etat === 'ANGLE_MORT')
+      return '<li class="mur">\u25B2 ' + ech(s.source) + ' · ' + ech(s.pourquoi || 'muette') + '</li>';
+    return '<li>' + ech(s.source) + ' · non lancée</li>';
+  }).join('');
+  return '<div class="sources"><div class="t">Ce que chaque source a répondu</div><ul>' + puces +
+    '</ul><p class="n">\u25B2 signale une source qui <b>n’a pas répondu</b>, pas une source vide. ' +
+    'Un moteur qui oppose un mur à une adresse de centre de données n’a pas dit « aucun résultat », ' +
+    'il n’a rien dit. L’afficher comme un zéro serait exactement le mensonge que cet outil refuse.</p></div>';
+}
+
+function chiffre(n, l){
+  return '<div class="chiffre"><div class="n">' + n + '</div><div class="l">' + ech(l) + '</div></div>';
+}
+
+function puceRel(rel){
+  if (!rel || rel === 'dofollow') return '<span class="puce suivi">dofollow</span>';
+  if (rel.indexOf('ugc') >= 0 || rel.indexOf('sponsored') >= 0)
+    return '<span class="puce ugc">' + ech(rel) + '</span>';
+  return '<span class="puce nonsuivi">' + ech(rel) + '</span>';
+}
+
+function tableauDomaines(b){
+  var lignes = (b.domaines || []).map(function(d){
+    var part = d.liens ? Math.round(d.suivis * 100 / d.liens) : 0;
+    return '<tr>' +
+      '<td><span class="dom">' + ech(d.domaine_src) + '</span></td>' +
+      '<td class="num">' + nb(d.liens) + '</td>' +
+      '<td class="num">' + nb(d.suivis) + ' <span style="color:var(--doux)">(' + part + ' %)</span></td>' +
+      '<td class="num" style="color:var(--doux)">' + ech(String(d.depuis || '').slice(0,10)) + '</td>' +
+      '<td><a href="https://' + ech(d.domaine_src) + '" target="_blank" rel="noopener nofollow">ouvrir ↗</a></td>' +
+    '</tr>';
+  }).join('');
+  if (!lignes) return '<div class="vide">Aucun domaine référent confirmé pour ce filtre.</div>';
+  return '<div class="tableau"><table><thead><tr>' +
+    '<th>Domaine référent</th><th style="text-align:right">Liens</th>' +
+    '<th style="text-align:right">Dofollow</th><th style="text-align:right">Vu le</th><th></th>' +
+    '</tr></thead><tbody>' + lignes + '</tbody></table></div>';
+}
+
+function tableauLiens(b){
+  var lignes = (b.liens || []).map(function(l){
+    return '<tr>' +
+      '<td><span class="dom">' + ech(l.domaine_src) + '</span>' +
+        '<a class="url" href="' + ech(l.url_src) + '" target="_blank" rel="noopener nofollow">' +
+        ech(l.url_src) + '</a></td>' +
+      '<td><span class="anc" title="' + ech(l.ancre || '') + '">' +
+        (l.ancre ? ech(l.ancre) : '<i style="color:var(--doux)">lien sur un bloc, sans ancre texte</i>') +
+        '</span></td>' +
+      '<td>' + puceRel(l.rel) + '</td>' +
+      '<td><span class="url">' + ech(l.url_dest) + '</span></td>' +
+      '<td class="num" style="color:var(--doux)">' + ech(l.source_donnee) + '</td>' +
+    '</tr>';
+  }).join('');
+  if (!lignes) return '<div class="vide">Aucun lien confirmé pour ce filtre.</div>';
+
+  var suite = '';
+  var restants = b.total_affichable - (b.page + 1) * b.par_page;
+  if (restants > 0){
+    suite = '<div style="padding:12px 20px;border-top:1px solid var(--bord)">' +
+      '<button class="bouton creux petit" id="bl-plus">Voir les ' + nb(restants) + ' liens suivants</button></div>';
+  }
+  return '<div class="tableau"><table><thead><tr>' +
+    '<th>Page qui fait le lien</th><th>Ancre</th><th>rel</th><th>Destination</th>' +
+    '<th style="text-align:right">Trouvé par</th>' +
+    '</tr></thead><tbody>' + lignes + '</tbody></table></div>' + suite;
+}
+
+function dessinerBacklinks(){
+  var boite = document.getElementById('bl');
+  if (!boite || !etatBl.donnees) return;
+  var b = etatBl.donnees;
+  var robot = b.robot;
+
+  var suivis = 0, total = 0;
+  (b.repartition_rel || []).forEach(function(x){
+    total += x.n;
+    if (x.rel === 'dofollow') suivis += x.n;
+  });
+  var partSuivis = total ? Math.round(suivis * 100 / total) : null;
+
+  var enCours = !!robot && (robot.etat === 'attente' || robot.etat === 'candidats' || robot.etat === 'verification');
+
+  var bandeau = '';
+  if (enCours){
+    bandeau = '<div class="progression"><span class="tourne"></span><span>Le robot travaille sur <b>' +
+      ech(b.cible) + '</b> — ' + ech(robot.phase_msg || robot.etat) + ' · ' + nb(robot.pages_lues) +
+      ' pages ouvertes' + (robot.restants ? ' · ' + nb(robot.restants) + ' en attente' : '') +
+      '. Il continue tout seul dans le nuage, vous pouvez fermer cette page.</span></div>';
+  } else if (robot && robot.etat === 'fini'){
+    bandeau = '<div class="progression fini"><span>✓ Passage terminé — ' + nb(robot.pages_lues) +
+      ' pages ouvertes, ' + ech(robot.phase_msg || '') + '. Relancez pour chercher plus loin.</span></div>';
+  }
+
+  var corps;
+  if (!total && !enCours){
+    corps = '<div class="vide"><b>Aucun lien confirmé pour l’instant.</b>' +
+      'L’index partagé ne connaît pas encore ce domaine. Lancez le robot : il cherche les pages qui ' +
+      'citent ce site, les ouvre une par une, et ne garde que les liens qu’il a réellement lus dans ' +
+      'le HTML servi.</div>';
+  } else {
+    corps = etatBl.onglet === 'domaines' ? tableauDomaines(b) : tableauLiens(b);
+  }
+
+  boite.innerHTML =
+    '<div class="bl">' +
+      '<div class="bl-tete">' +
+        '<div class="titre"><h3>Backlinks de ' + ech(b.cible) + '</h3>' +
+          '<p class="nature">' + ech(b.nature) + '</p></div>' +
+        '<button class="bouton petit" id="bl-lancer"' + (enCours ? ' disabled' : '') + '>' +
+          (enCours ? 'robot en cours…' : (total ? 'Relancer le robot' : 'Lancer le robot')) + '</button>' +
+      '</div>' +
+      bandeau +
+      panneauSources(robot) +
+      '<div class="chiffres">' +
+        chiffre(nb(total), 'liens confirmés') +
+        chiffre(nb((b.domaines || []).length), 'domaines référents') +
+        chiffre(partSuivis === null ? '—' : partSuivis + ' %', 'en dofollow') +
+        chiffre(nb(robot ? robot.pages_lues : 0), 'pages ouvertes') +
+      '</div>' +
+      '<div class="onglets">' +
+        '<button class="onglet" data-o="domaines" aria-selected="' + (etatBl.onglet === 'domaines') + '">Domaines référents</button>' +
+        '<button class="onglet" data-o="liens" aria-selected="' + (etatBl.onglet === 'liens') + '">Tous les liens</button>' +
+        '<span class="filtres"><select id="bl-rel" aria-label="filtrer par attribut rel">' +
+          '<option value=""' + (etatBl.rel === '' ? ' selected' : '') + '>tous les liens</option>' +
+          '<option value="dofollow"' + (etatBl.rel === 'dofollow' ? ' selected' : '') + '>dofollow seulement</option>' +
+          '<option value="nofollow"' + (etatBl.rel === 'nofollow' ? ' selected' : '') + '>nofollow, ugc, sponsored</option>' +
+        '</select></span>' +
+      '</div>' +
+      corps +
+    '</div>';
+
+  var lancer = document.getElementById('bl-lancer');
+  if (lancer) lancer.onclick = function(){ lancerRobot(b.cible); };
+
+  Array.prototype.forEach.call(boite.querySelectorAll('.onglet'), function(o){
+    o.onclick = function(){ etatBl.onglet = o.getAttribute('data-o'); dessinerBacklinks(); };
+  });
+
+  var sel = document.getElementById('bl-rel');
+  if (sel) sel.onchange = function(){ etatBl.rel = sel.value; etatBl.page = 0; chargerBacklinks(b.cible); };
+
+  var plus = document.getElementById('bl-plus');
+  if (plus) plus.onclick = function(){ etatBl.page += 1; chargerBacklinks(b.cible); };
+}
+
+async function lancerRobot(cible){
+  var bouton = document.getElementById('bl-lancer');
+  if (bouton){ bouton.disabled = true; bouton.textContent = 'démarrage…'; }
+
+  var r = await api('/api/backlinks', { method:'POST', headers:{ 'content-type':'application/json' },
+    body: JSON.stringify({ domaine: cible }) });
+
+  if (!r.ok){
+    var boite = document.getElementById('bl');
+    if (boite) boite.insertAdjacentHTML('afterbegin',
+      '<div class="erreur">' + ech((r.d && r.d.erreur) || 'le robot n’a pas pu démarrer') + '</div>');
+    if (bouton){ bouton.disabled = false; bouton.textContent = 'Lancer le robot'; }
+    return;
+  }
+
+  await chargerBacklinks(cible);
+  demarrerSuivi(cible);
+}
+
+/* Le suivi : on relit l'etat regulierement tant que le robot avance, et on lache au
+   bout de dix minutes. Une minuterie qui ne s'arrete jamais est une page qui chauffe
+   le telephone de quelqu'un pendant la nuit. */
+function demarrerSuivi(cible){
+  arreterSuivi();
+  var tours = 0;
+  minuterie = setInterval(async function(){
+    tours += 1;
+    if (tours > 120){ arreterSuivi(); return; }
+    await chargerBacklinks(cible);
+    var r = etatBl.donnees && etatBl.donnees.robot;
+    if (!r || r.etat === 'fini' || r.etat === 'mur') arreterSuivi();
+  }, 5000);
+}
+function arreterSuivi(){ if (minuterie){ clearInterval(minuterie); minuterie = null; } }
+
+/* ---------------------------------------------------------------- démarrage */
+
+relireCompte();
+var pre = new URLSearchParams(location.search).get('d');
+if (pre) champ.value = pre;
+})();
+</script>
+</body>
+</html>

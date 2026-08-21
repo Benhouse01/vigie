@@ -1,0 +1,117 @@
+{
+  "_lisez_moi": [
+    "Copiez ce fichier en config/domaines.json et mettez VOS domaines.",
+    "",
+    "Un domaine, un role, et les roles ne se melangent jamais :",
+    "  nous       vos domaines. C'est le seul endroit ou vous avez Search Console,",
+    "             donc le seul ou vous mesurez du REEL au lieu d'estimer.",
+    "  concurrent ceux que vous comparez a vous. Ils recoivent la note de domaine.",
+    "  spot       les sites ou vous aimeriez obtenir un lien. Ils recoivent la note de LIEN,",
+    "             qui ne repond pas a la meme question.",
+    "",
+    "Le calculateur REFUSE de noter un domaine dont le role ne correspond pas a la formule",
+    "appelee. C'est volontaire : comparer un concurrent et un spot de netlinking avec la",
+    "meme grille produit un classement qui ne veut rien dire.",
+    "",
+    "Le champ gsc porte votre propriete Search Console, sous la forme exacte qu'elle a",
+    "chez Google : « sc-domain:exemple.com » pour une propriete de domaine, ou l'URL",
+    "complete pour une propriete de prefixe. Laissez null si vous n'en avez pas.",
+    "",
+    "TROIS CHAMPS FACULTATIFS, tous les trois decrits plus bas dans ce fichier :",
+    "  lexiques   ou trouver le vocabulaire de VOTRE secteur (composante C de la note)",
+    "  secteur    la requete de secteur que le robot pose aux moteurs, apres votre marque",
+    "  annuaires  les annuaires ou vivent vos fiches, qui remplacent la liste par defaut"
+  ],
+
+  "titre": "Vigie",
+  "marque": "Ma veille SEO",
+
+  "_lexiques_lisez_moi": [
+    "⛔ LA COMPOSANTE C DE LA NOTE MESURE UNE COHERENCE AVEC UN SECTEUR, ET LE SECTEUR EST",
+    "   LE VOTRE. Le vocabulaire ne vit pas dans le code : copiez config/lexiques.exemple.json",
+    "   en config/lexiques.json et remplacez les mots. Tant que vous ne l'avez pas fait,",
+    "   l'outil vous le dit a chaque lancement, et C mesure votre proximite avec le secteur",
+    "   de l'exemple, pas avec le votre.",
+    "",
+    "   Le champ `lexiques` ci-dessous est facultatif. Il accepte deux formes :",
+    "     un chemin  \"lexiques\": \"lexiques-a-moi.json\"   relatif A CE FICHIER",
+    "     l objet    \"lexiques\": { \"version\": ..., \"l1\": ..., \"l2\": ..., \"court\": ... }",
+    "   Sans lui, l outil cherche un lexiques.json pose a cote de ce fichier, puis la",
+    "   variable VIGIE_LEXIQUES, puis l exemple. Un chemin qui pointe dans le vide fait",
+    "   LEVER : mieux vaut un demarrage refuse qu une note calculee avec le mauvais",
+    "   vocabulaire sans que personne ne s en apercoive."
+  ],
+
+  "_secteur_lisez_moi": [
+    "La requete que le robot pose aux moteurs juste apres votre marque, pour trouver les",
+    "pages qui vous nomment. Le robot demande toujours \"<marque>\", <marque> avis et",
+    "<marque> review ; `secteur` ajoute <marque> <secteur>, par exemple",
+    "« <marque> logiciel de facturation ». Laissez-le absent si vous n en avez pas :",
+    "une requete hors sujet consomme un appel moteur et un delai pour rien."
+  ],
+  "secteur": "votre categorie de produit",
+
+  "_annuaires_lisez_moi": [
+    "Les annuaires et agregateurs ou vivent vos fiches. Renseigne, ce tableau REMPLACE la",
+    "liste generaliste par defaut du robot (annuaires de logiciels, valables partout et",
+    "excellents nulle part).",
+    "",
+    "⛔ POSEZ L URL EXACTE DE LA PAGE OU LA FICHE VIT, pas la racine du site. Le robot ne",
+    "   lit que trois URL par hote, et un annuaire n affiche jamais une fiche sur son",
+    "   accueil : viser la racine, c est conclure « le lien a disparu » alors qu il est",
+    "   toujours la, une page plus loin.",
+    "⛔ URL COMPLETES, avec http:// ou https://. Une entree qui n en est pas une est",
+    "   annoncee et ignoree, jamais crawlee au hasard."
+  ],
+  "annuaires": [
+    "https://annuaire-exemple.fr/categories/votre-categorie/",
+    "https://blog-exemple.com/les-meilleurs-outils/"
+  ],
+
+  "nous": [
+    { "domaine": "exemple.com", "libelle": "Mon site", "gsc": "sc-domain:exemple.com", "marche": "FR" }
+  ],
+
+  "concurrents": [
+    { "domaine": "concurrent-un.com", "libelle": "Concurrent un" },
+    { "domaine": "concurrent-deux.com", "libelle": "Concurrent deux", "note": "le plus proche de nous en positionnement" },
+    {
+      "domaine": "concurrent-trois.com",
+      "libelle": "Concurrent trois",
+      "angle_mort": "Exemple d'angle mort a documenter : robots.txt en Disallow integral, donc incartographiable PAR CHOIX DE L'EDITEUR. Zero URL mesuree n'est PAS zero page, et le site l'affichera ainsi."
+    }
+  ],
+
+  "spots": [
+    { "domaine": "annuaire-exemple.fr", "libelle": "Annuaire du secteur", "page": "https://annuaire-exemple.fr/categories/", "note": "ou vit notre fiche" },
+    { "domaine": "blog-exemple.com", "libelle": "Blog specialise" }
+  ],
+
+  "requetes": {
+    "_lisez_moi": [
+      "Le pool est FIGE et VERSIONNE, et ce n'est pas une precaution de style.",
+      "On ne compare des positions dans le temps que si la liste des requetes ne bouge pas :",
+      "ajouter une requete facile fait monter la moyenne sans que rien n'ait bouge dans le",
+      "marche. Toute requete ajoutee demarre une NOUVELLE version, et les deux versions ne",
+      "se comparent pas entre elles.",
+      "",
+      "Mettez ici les requetes sur lesquelles vous voulez exister, pas celles ou vous etes",
+      "deja premier. Une vingtaine par langue suffit."
+    ],
+    "version": "v1-2026-01-01",
+    "fr": [
+      "votre requete principale",
+      "votre requete principale gratuit",
+      "meilleur votre produit",
+      "alternative a un concurrent",
+      "votre categorie de produit"
+    ],
+    "en": [
+      "your main query",
+      "free your main query",
+      "best your product",
+      "competitor alternative",
+      "your product category"
+    ]
+  }
+}

@@ -1,0 +1,273 @@
+// LE ROBOT, ET SON UNITE DE TRAVAIL.
+//
+// Il ne tourne sur aucun PC : il vit dans le nuage, et il avance par TOURS. Un tour
+// fait une petite quantite de travail puis rend la main. C'est ce qui lui permet de
+// tenir dans les plafonds d'un palier gratuit :
+//
+//   ⛔ 50 sous-requetes par invocation. Un tour de verification ouvre au plus 20
+//      pages (page + robots.txt eventuel), jamais davantage.
+//   ⛔ Le processeur d'une Function gratuite se compte en millisecondes. Tout le
+//      temps passe ici est du temps d'attente reseau, qui ne compte pas ; aucun
+//      calcul lourd n'a sa place dans ce fichier.
+//
+// Deux appelants : le declencheur horaire du Worker `vigie-robot`, et le bouton de
+// la vitrine, qui fait un tour immediat pour que l'utilisateur voie quelque chose
+// bouger tout de suite.
+
+import {
+  MAINTENANT, domaineDe, memeSite, liensVers, qualifierRel,
+  reglesRobots, cheminAutorise, ouvrirPage,
+} from "./_commun.js";
+import { trouverCandidats } from "./_decouverte.js";
+
+export const PAGES_PAR_TOUR = 18;
+export const PLAFOND_CANDIDATS = 140;
+
+/** Met la cible en file, ou remonte sa priorite si elle y est deja. */
+export async function demanderCrawl(bd, cible, demandeur) {
+  const existe = await bd
+    .prepare("SELECT cible, etat FROM file_crawl WHERE cible = ?")
+    .bind(cible)
+    .first();
+
+  if (!existe) {
+    await bd
+      .prepare(
+        `INSERT INTO file_crawl (cible, etat, phase_msg, demande_le, demandeur, priorite)
+         VALUES (?, 'attente', 'en file', ?, ?, 1)`
+      )
+      .bind(cible, MAINTENANT(), demandeur || null)
+      .run();
+    return { etat: "attente", neuf: true };
+  }
+
+  if (existe.etat === "fini" || existe.etat === "mur") {
+    await bd
+      .prepare(
+        `UPDATE file_crawl SET etat = 'attente', phase_msg = 'reprise demandee',
+           demande_le = ?, demandeur = ?, priorite = 1 WHERE cible = ?`
+      )
+      .bind(MAINTENANT(), demandeur || null, cible)
+      .run();
+    return { etat: "attente", neuf: false };
+  }
+
+  return { etat: existe.etat, neuf: false };
+}
+
+/** L'etat lisible d'une cible en file. */
+export async function etatCrawl(bd, cible) {
+  const l = await bd
+    .prepare(
+      `SELECT etat, phase_msg, demande_le, passe_le, fini_le, pages_lues,
+              candidats_vus, liens_trouves, rapport FROM file_crawl WHERE cible = ?`
+    )
+    .bind(cible)
+    .first();
+  if (!l) return null;
+  const restants = await bd
+    .prepare("SELECT COUNT(*) AS n FROM candidats WHERE cible = ? AND etat = 'attente'")
+    .bind(cible)
+    .first();
+  let sources = null;
+  try { sources = l.rapport ? JSON.parse(l.rapport) : null; } catch { sources = null; }
+  return { ...l, rapport: undefined, sources, restants: restants?.n ?? 0 };
+}
+
+/**
+ * UN TOUR DE ROBOT sur la cible donnee, ou sur la premiere de la file.
+ * Rend toujours un compte rendu, jamais une exception.
+ */
+export async function unTour(bd, cibleVoulue = null, budgetPages = PAGES_PAR_TOUR, ignorerBail = false) {
+  const tache = cibleVoulue
+    ? await bd.prepare("SELECT * FROM file_crawl WHERE cible = ?").bind(cibleVoulue).first()
+    : await bd
+        .prepare(
+          `SELECT * FROM file_crawl WHERE etat IN ('attente','candidats','verification')
+            ORDER BY priorite ASC, demande_le ASC LIMIT 1`
+        )
+        .first();
+
+  if (!tache) return { fait: "rien", pourquoi: "file vide" };
+  const cible = tache.cible;
+
+  // ⛔ ON PREND UN BAIL AVANT DE TRAVAILLER, ET C EST OBLIGATOIRE.
+  //    Deux appelants existent en permanence : le bouton de la vitrine et le
+  //    declencheur horaire. Sans bail, ils se sont lances sur la meme cible a dix
+  //    secondes d intervalle et ont TOUS DEUX refait la phase de decouverte : les
+  //    memes moteurs interroges deux fois, et la phase de lecture jamais atteinte.
+  //    La mise a jour ci-dessous ne passe que si personne n a touche la ligne depuis
+  //    quatre-vingt-dix secondes ; sinon on rend la main sans rien faire. Le delai
+  //    est plus long qu un tour, pour qu un tour lent ne se fasse pas voler sa tache,
+  //    et plus court qu un abandon, pour qu un tour mort ne bloque pas la file.
+  // `ignorerBail` sert au CHAINAGE : la vitrine enchaine decouverte puis lecture dans
+  // la meme requete, et le second tour ne doit pas buter sur le bail que le premier
+  // vient de poser lui-meme.
+  const bail = new Date(Date.now() - (ignorerBail ? -1000 : 90000)).toISOString();
+  const pris = await bd
+    .prepare("UPDATE file_crawl SET passe_le = ? WHERE cible = ? AND (passe_le IS NULL OR passe_le < ?)")
+    .bind(MAINTENANT(), cible, bail)
+    .run();
+  if (!pris.meta || pris.meta.changes === 0) {
+    return { fait: "rien", cible, pourquoi: "un autre tour travaille deja sur cette cible" };
+  }
+
+  // ---------------------------------------------------------- phase 1 : trouver
+  if (tache.etat === "attente" || tache.etat === "candidats") {
+    const { candidats, rapport } = await trouverCandidats(bd, cible, PLAFOND_CANDIDATS);
+
+    if (candidats.length) {
+      // D1 n'aime pas les insertions unitaires en boucle : on groupe.
+      const lots = [];
+      for (const c of candidats) {
+        lots.push(
+          bd
+            .prepare(
+              `INSERT INTO candidats (cible, url, origine, etat, ajoute_le)
+               VALUES (?, ?, ?, 'attente', ?)
+               ON CONFLICT(cible, url) DO NOTHING`
+            )
+            .bind(cible, c.url, c.origine, MAINTENANT())
+        );
+      }
+      await bd.batch(lots);
+    }
+
+    const muettes = rapport.filter((x) => x.etat === "ANGLE_MORT").map((x) => x.source);
+    const message =
+      `${candidats.length} pages a ouvrir` +
+      (muettes.length ? ` · ${muettes.length} source(s) muette(s) : ${muettes.join(", ")}` : "");
+
+    await bd
+      .prepare(
+        `UPDATE file_crawl SET etat = 'verification', phase_msg = ?, rapport = ?,
+                candidats_vus = candidats_vus + ?
+          WHERE cible = ?`
+      )
+      .bind(message, JSON.stringify(rapport), candidats.length, cible)
+      .run();
+
+    return { fait: "decouverte", cible, candidats: candidats.length, rapport };
+  }
+
+  // ---------------------------------------------------- phase 2 : ouvrir et lire
+  const aLire = await bd
+    .prepare("SELECT url, origine FROM candidats WHERE cible = ? AND etat = 'attente' LIMIT ?")
+    .bind(cible, budgetPages)
+    .all();
+
+  const pages = aLire.results || [];
+  if (!pages.length) {
+    const total = await bd
+      .prepare("SELECT COUNT(*) AS n FROM backlinks WHERE cible = ?")
+      .bind(cible)
+      .first();
+    await bd
+      .prepare(
+        `UPDATE file_crawl SET etat = 'fini', fini_le = ?, phase_msg = ? WHERE cible = ?`
+      )
+      .bind(MAINTENANT(), `${total?.n ?? 0} liens confirmes`, cible)
+      .run();
+    return { fait: "fini", cible, liens: total?.n ?? 0 };
+  }
+
+  let lus = 0;
+  let murs = 0;
+  let liens = 0;
+  const ecritures = [];
+
+  for (const page of pages) {
+    const hote = domaineDe(page.url);
+    if (!hote || memeSite(hote, cible)) {
+      ecritures.push(bd.prepare("UPDATE candidats SET etat = 'vide' WHERE cible = ? AND url = ?").bind(cible, page.url));
+      continue;
+    }
+
+    // ⛔ LA POLITESSE PASSE AVANT LA MESURE. Un robot qui ignore robots.txt fait
+    //    bannir l'adresse, et il grille le site aupres de celui qu'on voulait
+    //    justement convaincre de nous publier.
+    const regles = await reglesRobots(bd, hote);
+    let chemin = "/";
+    try { chemin = new URL(page.url).pathname; } catch { /* garde "/" */ }
+    if (!cheminAutorise(regles, chemin)) {
+      murs++;
+      ecritures.push(bd.prepare("UPDATE candidats SET etat = 'mur' WHERE cible = ? AND url = ?").bind(cible, page.url));
+      continue;
+    }
+
+    const res = await ouvrirPage(page.url);
+    lus++;
+
+    if (res.mur) {
+      murs++;
+      ecritures.push(bd.prepare("UPDATE candidats SET etat = 'mur' WHERE cible = ? AND url = ?").bind(cible, page.url));
+      continue;
+    }
+
+    const trouves = liensVers(res.html, cible);
+    // On ne garde que les liens qui pointent VRAIMENT vers le domaine cible : le
+    // simple fait que la chaine apparaisse dans l'URL ne suffit pas (un lien vers
+    // « annuaire.fr/fiche/exemple.com » n'est pas un lien vers exemple.com).
+    const retenus = [];
+    for (const t of trouves) {
+      let absolue;
+      try { absolue = new URL(t.url, page.url).toString(); } catch { continue; }
+      const dest = domaineDe(absolue);
+      if (!dest || !memeSite(dest, cible)) continue;
+      retenus.push({ ...t, url: absolue });
+    }
+
+    if (retenus.length) {
+      for (const t of retenus.slice(0, 12)) {
+        liens++;
+        ecritures.push(
+          bd
+            .prepare(
+              `INSERT INTO backlinks
+                 (cible, domaine_src, url_src, url_dest, ancre, rel, rel_brut, etat, vu_le, source_donnee)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'MESURE', ?, ?)
+               ON CONFLICT(cible, url_src, url_dest) DO UPDATE SET
+                 ancre = excluded.ancre, rel = excluded.rel, rel_brut = excluded.rel_brut,
+                 etat = 'MESURE', vu_le = excluded.vu_le`
+            )
+            .bind(
+              cible, hote, page.url, t.url, t.ancre || null,
+              qualifierRel(t.relBrut), t.relBrut || "", MAINTENANT(), page.origine
+            )
+        );
+      }
+      ecritures.push(bd.prepare("UPDATE candidats SET etat = 'lu' WHERE cible = ? AND url = ?").bind(cible, page.url));
+    } else {
+      // La page s'est ouverte et ne porte aucun lien : c'est une MESURE, pas un echec.
+      ecritures.push(bd.prepare("UPDATE candidats SET etat = 'vide' WHERE cible = ? AND url = ?").bind(cible, page.url));
+    }
+  }
+
+  if (ecritures.length) await bd.batch(ecritures);
+
+  const restants = await bd
+    .prepare("SELECT COUNT(*) AS n FROM candidats WHERE cible = ? AND etat = 'attente'")
+    .bind(cible)
+    .first();
+
+  await bd
+    .prepare(
+      `UPDATE file_crawl
+          SET pages_lues = pages_lues + ?, liens_trouves = liens_trouves + ?,
+              phase_msg = ?, etat = ?
+        WHERE cible = ?`
+    )
+    .bind(
+      lus, liens,
+      `${restants?.n ?? 0} pages restantes`,
+      (restants?.n ?? 0) > 0 ? "verification" : "fini",
+      cible
+    )
+    .run();
+
+  if ((restants?.n ?? 0) === 0) {
+    await bd.prepare("UPDATE file_crawl SET fini_le = ? WHERE cible = ?").bind(MAINTENANT(), cible).run();
+  }
+
+  return { fait: "verification", cible, pages_lues: lus, murs, liens, restants: restants?.n ?? 0 };
+}
