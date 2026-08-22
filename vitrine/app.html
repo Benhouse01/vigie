@@ -471,7 +471,8 @@ function vueLiens(){
     return h + '<div class="avert"><strong>Aucun lien lu pour l\'instant.</strong> ' +
       'Ce n\'est pas « zéro backlink » : c\'est que le robot n\'a pas encore ouvert de page qui en porte. ' +
       nb((BL.referents_annonces||[]).length) + ' domaine(s) sont annoncés par un index et attendent d\'être vérifiés. ' +
-      '<a href="#/robot/' + ech(cible) + '">lancer le robot</a></div>';
+      '<a href="#/robot/' + ech(cible) + '">lancer le robot</a>, puis revenez dans dix minutes : ' +
+      'l\'index du crawler déverse ce qu\'il sait déjà sur ce domaine au passage suivant.</div>';
   }
   h += '<div class="tableau haut"><table><thead><tr>' +
     '<th>Page source</th><th>Ancre</th><th>Destination</th><th>Attribut</th><th>Vu</th><th>Lu le</th>' +
@@ -639,7 +640,19 @@ function vueRobot(){
     '<div class="avert"><strong>Ce que fait un lancement.</strong> Vigie cherche des pages ' +
     'candidates, les ouvre, et lit le lien dans le HTML servi. Chaque domaine confirmé passe ' +
     'du tableau « annoncés » au tableau des liens lus. ⛔ Ce que le robot ne trouve pas ' +
-    'n\'est pas compté zéro : ça reste « non vérifié ».</div>';
+    'n\'est pas compté zéro : ça reste « non vérifié ».</div>' +
+    /*
+      ⛔ DIRE LE DELAI PLUTOT QUE DE LAISSER CROIRE A UNE PANNE.
+         Deux choses arrivent apres un lancement, et pas a la meme vitesse : le robot lit
+         quelques pages tout de suite, puis l'index du crawler deverse ce qu'il sait deja
+         sur ce domaine au passage suivant, au plus dix minutes apres. Sans cette phrase,
+         un ecran vide pendant huit minutes ressemble a un outil casse.
+    */
+    '<div class="avert calme"><strong>Deux choses arrivent, à deux vitesses.</strong> ' +
+    'Le robot ouvre quelques pages <em>tout de suite</em>, c\'est ce que vous voyez ci-dessus. ' +
+    'Puis l\'index du crawler, qui lit près de deux millions de pages par jour de son côté, ' +
+    'déverse ce qu\'il sait déjà sur ce domaine au passage suivant : <strong>au plus dix ' +
+    'minutes</strong>. Revenez sur cette page, elle se recharge à chaque visite.</div>';
   return h;
 }
 
