@@ -88,10 +88,22 @@ async function sql(requete, params = []) {
  *    l'archive ne sert a rien si on lit la mauvaise page. On interroge donc l'URL EXACTE
  *    quand on la connait, et un motif filtre sur le nom de la marque sinon.
  */
-async function emplacements(motif, combien) {
+async function emplacements(motif, combien, filtre = null) {
+  // ⛔ L'INDEX N'ACCEPTE QUE DEUX FORMES, ET IL REFUSE LES AUTRES PAR UN 404 MUET.
+  //    Mesure du 22/08/2026, quatre formes essayees a la main :
+  //      `https://www.adafruit.com/faq`      200, l'URL exacte marche
+  //      `trustpilot.com/*`                  200, le prefixe avec une seule etoile marche
+  //      `trustpilot.com`                    404, un domaine nu n'est pas une URL capturee
+  //      `domaine.com/*marque*`              404, DEUX etoiles ne sont pas supportees
+  //    Ma premiere version construisait la quatrieme forme. Elle rendait donc 404 sur
+  //    TOUS les domaines annonces, et le script concluait « absent de l'archive » alors
+  //    que c'etait sa requete qui etait invalide. Un 404 de cet index veut dire « aucune
+  //    capture », jamais « ta syntaxe est fausse » : les deux se ressemblent exactement.
+  //    On demande donc le prefixe, et on filtre nous-memes sur le nom de la marque.
+  const large = filtre ? Math.max(combien * 40, 200) : combien * 6;
   const url =
     `https://index.commoncrawl.org/${INDEX}-index` +
-    `?url=${encodeURIComponent(motif)}&output=json&limit=${combien * 6}`;
+    `?url=${encodeURIComponent(motif)}&output=json&limit=${large}`;
   const r = await fetch(url, { headers: { "User-Agent": UA } });
   if (r.status === 404) return { etat: "absent", pages: [] };
   if (!r.ok) return { etat: `HTTP ${r.status}`, pages: [] };
@@ -104,6 +116,9 @@ async function emplacements(motif, combien) {
     try { o = JSON.parse(ligne); } catch { continue; }
     if (o.status !== "200") continue;
     if (o.mime && !/html/i.test(o.mime)) continue;
+    // Quand on ne connait pas la page exacte, on ne garde que celles dont l'adresse
+    // nomme la marque : un annuaire appelle sa fiche d'apres le produit.
+    if (filtre && !o.url.toLowerCase().includes(filtre)) continue;
     pages.push({
       url: o.url,
       fichier: o.filename,
@@ -225,7 +240,7 @@ async function main() {
         [CIBLE, MAX_DOMAINES - visees.length]
       );
       visees.push(...annonces.map((l) => ({
-        motif: `${l.domaine_src}/*${marque}*`, dom: l.domaine_src, quoi: "annonce",
+        motif: `${l.domaine_src}/*`, filtre: marque, dom: l.domaine_src, quoi: "annonce",
       })));
     }
   }
@@ -243,7 +258,7 @@ async function main() {
     const dom = v.dom;
     await dormir(ENTRE_APPELS);
     let emp;
-    try { emp = await emplacements(v.motif, MAX_PAGES_PAR_DOMAINE); }
+    try { emp = await emplacements(v.motif, MAX_PAGES_PAR_DOMAINE, v.filtre || null); }
     catch (e) { dire(`  ${dom} : index illisible (${e.message})`); continue; }
 
     if (!emp.pages.length) {
