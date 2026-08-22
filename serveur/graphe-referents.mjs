@@ -37,7 +37,22 @@ const arg = (nom, defaut = null) => {
   return t ? t.slice(nom.length + 3) : defaut;
 };
 
-export const PLAFOND_DEFAUT = 1500;
+/*
+  ⛔ DEUX PLAFONDS EN SERIE, ET C'EST LE PLUS BAS QUI DECIDE.
+     Le 22/08/2026, j'ai porte le plafond de la poussee vers D1 de 500 a 3 000 et j'ai cru
+     le probleme regle. La passe suivante a sorti myfxbook et tradingview a EXACTEMENT
+     2 000 : 500 de l'ancienne passe plus 1 500 de la nouvelle. Le meme chiffre rond
+     qu'avant, pour une autre cause.
+
+     La lecture du graphe coupait ICI, a 1 500, avant que le plafond de D1 ne s'applique.
+     Relever un plafond en aval sans regarder l'amont ne change rien, et la rondeur de la
+     valeur est le seul indice qu'il reste un couperet plus haut dans la chaine.
+
+     Les deux valent desormais 3 000, pour qu'il n'y en ait qu'un. tradingview restera
+     marque « plancher » — le graphe lui connait 36 891 referents — et l'ecran l'affiche
+     avec un « ≥ ». Un plancher assume vaut mieux qu'un total invente.
+*/
+export const PLAFOND_DEFAUT = 3000;
 
 /**
  * Pour chaque cible, la liste des domaines qui pointent vers elle.
