@@ -40,7 +40,21 @@ const arg = (nom, defaut = null) => {
 const COMPTE = process.env.CLOUDFLARE_ACCOUNT_ID;
 const JETON = process.env.CLOUDFLARE_API_TOKEN;
 const BASE = process.env.VIGIE_D1;
-const PLAFOND_D1 = Number(arg("plafond-d1", 500));
+/*
+  ⛔ CE PLAFOND DECIDE DE CE QUE L'UTILISATEUR CROIT ETRE UN TOTAL.
+     A 500, deux domaines sortaient a EXACTEMENT 1 000 dans la base (myfxbook et
+     tradingview, en cumulant deux passes). Deux nombres identiques au domaine pres, ce
+     n'est pas une mesure, c'est une signature de troncature — le graphe en connait
+     36 891 pour tradingview.
+
+     Pourquoi 3 000 et pas plus : le palier gratuit de D1 accepte 100 000 lignes ECRITES
+     PAR JOUR, et `fileDattente()` ne ressert une cible que si sa derniere lecture date
+     de plus d'un trimestre. Le cout est donc ponctuel, pas quotidien. A 3 000, tous les
+     domaines du corpus passent en entier sauf tradingview, qui reste marque « plancher »
+     et le dit a l'ecran. Monter a 40 000 pour lui seul mangerait 37 % du budget d'une
+     journee pour un gain nul : personne n'analyse le 4 000e domaine referent.
+*/
+const PLAFOND_D1 = Number(arg("plafond-d1", 3000));
 const ATTENTE_MIN = Number(arg("attente", 10));
 
 if (!COMPTE || !JETON || !BASE) {
