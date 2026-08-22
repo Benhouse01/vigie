@@ -345,23 +345,50 @@ function enTete(titre, chapeau){
     (chapeau ? '<p class="chapeau">' + chapeau + '</p>' : '');
 }
 
+/*
+  ⛔ UN PLAFOND N'EST PAS UN TOTAL, ET LE SERVEUR LE DIT DEJA.
+     Quand le service pousse les domaines referents vers la base, il en garde au plus
+     500 par cible, parce que le palier gratuit de la base n'accepte que 100 000 lignes
+     ecrites par jour et qu'un seul gros domaine en a davantage. Dans ce cas il ecrit
+     `nature = "plancher"` sur les lignes concernees : la verite du chiffre est DANS la
+     donnee.
+
+     Mesure du 22/08/2026 : myfxbook.com et tradingview.com affichaient tous deux
+     EXACTEMENT 1 000 domaines referents. Ce n'est pas une coincidence, c'est la
+     signature d'une troncature — l'index en connait 36 891 pour tradingview. L'ecran
+     presentait donc un plafond comme un total, ce qui est precisement la faute que cet
+     outil existe pour ne pas commettre.
+
+     D'ou le « ≥ » : il coute une ligne de code et il change ce que le chiffre veut dire.
+*/
+function estPlancher(){
+  return ((BL && BL.referents_annonces) || []).some(function(r){ return r.nature === 'plancher'; });
+}
+
 function compteurs(){
   var c = (BL && BL.comptes) || {};
   var rel = {}; ((BL && BL.repartition_rel) || []).forEach(function(r){ rel[r.rel] = r.n; });
   var suivis = rel['dofollow'] || 0;
   var total = Object.keys(rel).reduce(function(s,k){ return s + rel[k]; }, 0);
+  var pl = estPlancher();
   return '<div class="blocs"><div class="bloc"><span class="etiq">Liens</span><div class="mesures">' +
-    m('Domaines distincts', c.domaines_distincts, 'lus et annoncés, dédoublonnés') +
+    m('Domaines distincts', c.domaines_distincts, 'lus et annoncés, dédoublonnés', pl) +
     m('Domaines lus', c.domaines_lus, 'page ouverte, HTML lu') +
-    m('Annoncés', c.annonces, 'par un index, non vérifiés') +
+    m('Annoncés', c.annonces, 'par un index, non vérifiés', pl) +
     m('Liens lus', total, nb(suivis) + ' en dofollow') +
-    '</div></div>' + blocSante() + '</div>';
+    '</div>' +
+    (pl ? '<div class="sous" style="margin-top:12px;color:var(--attention)">' +
+      '⚠ Ces nombres sont des <strong>planchers</strong>, pas des totaux : l\'index en connaît ' +
+      'davantage que ce que la base publique peut stocker par domaine.</div>' : '') +
+    '</div>' + blocSante() + '</div>';
 }
 
-function m(nom, val, sous){
+function m(nom, val, sous, plancher){
   var pale = (val === null || val === undefined) ? ' pale' : '';
-  return '<div class="mesure"><div class="nom">' + ech(nom) + '</div>' +
-    '<div class="val' + pale + '">' + (pale ? '—' : nb(val)) + '</div>' +
+  var signe = (plancher && !pale) ? '≥&nbsp;' : '';
+  return '<div class="mesure"' + (plancher ? ' title="plancher : la source a été tronquée, le vrai nombre est au-dessus"' : '') + '>' +
+    '<div class="nom">' + ech(nom) + '</div>' +
+    '<div class="val' + pale + '">' + (pale ? '—' : signe + nb(val)) + '</div>' +
     (sous ? '<div class="sous">' + sous + '</div>' : '') + '</div>';
 }
 
