@@ -50,13 +50,29 @@ foreach ($a in $attendus) {
 #    donnee reelle, trente-six fois la donnee. On pose donc le fichier PAUSE, les
 #    lecteurs se rangent en quelques secondes, on vide, on retire le fichier. Aucune
 #    page perdue : l etat vit en base, pas dans le robot.
+#
+# ⛔ ET ON REESSAIE, PARCE QUE LES ROBOTS NE SONT PAS LES SEULS A LIRE.
+#    Le pousseur et le rapporteur ouvrent la meme base et n obeissent pas au fichier
+#    PAUSE : ils passent, ils tiennent une transaction quelques secondes, et le vidage
+#    tombe pile dedans. Premiere tentative reelle du gardien, 23/08/2026 18h26 :
+#    « VIDAGE EMPECHE, un lecteur tenait encore », journal inchange a 1 660 Mo. Un seul
+#    essai ne suffit donc pas ; cinq essais espaces de huit secondes couvrent leur passe.
 $wal = 'C:\vigie\donnees\index.sqlite-wal'
 $walGo = if (Test-Path $wal) { [math]::Round((Get-Item $wal).Length / 1GB, 2) } else { 0 }
 if ($walGo -gt 1.5) {
   & $dire "journal WAL a $walGo Go : mise en pause des lecteurs le temps de le vider"
   New-Item -ItemType File -Path 'C:\vigie\PAUSE' -Force | Out-Null
   Start-Sleep -Seconds 12
-  $sortie = & 'C:\Program Files\nodejs\node.exe' 'C:\vigie\serveur\checkpoint.mjs' 2>&1
-  & $dire ("vidage du journal : " + (($sortie | Where-Object { $_ -notmatch 'ExperimentalWarning|trace-warnings' }) -join ' '))
+  $vide = $false
+  foreach ($essai in 1..5) {
+    $sortie = & 'C:\Program Files\nodejs\node.exe' 'C:\vigie\serveur\checkpoint.mjs' 2>&1
+    $ligne = ($sortie | Where-Object { $_ -match '^journal :' }) -join ' '
+    if ($LASTEXITCODE -eq 0) { & $dire "vidage du journal (essai $essai) : $ligne"; $vide = $true; break }
+    # Le fichier PAUSE se perime au bout de dix minutes cote robot : on le retouche
+    # a chaque essai pour qu il reste valide pendant toute la serie.
+    (Get-Item 'C:\vigie\PAUSE').LastWriteTime = Get-Date
+    Start-Sleep -Seconds 8
+  }
+  if (-not $vide) { & $dire "vidage du journal IMPOSSIBLE apres cinq essais, un lecteur ne lache pas : $ligne" }
   Remove-Item 'C:\vigie\PAUSE' -Force -ErrorAction SilentlyContinue
 }
