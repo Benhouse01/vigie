@@ -92,6 +92,17 @@ bd.exec("PRAGMA synchronous = NORMAL");
 bd.exec("PRAGMA temp_store = MEMORY");
 bd.exec("PRAGMA cache_size = -200000");
 
+// ⛔ LE JOURNAL WAL NE SE VIDE QUE QUAND PLUS PERSONNE NE LIT, ET ICI QUELQU UN LIT
+//    TOUJOURS. Cent vingt lecteurs repartis sur deux robots ne laissent jamais un
+//    instant sans transaction ouverte : SQLite recopie bien les pages dans la base,
+//    mais il ne peut jamais REMETTRE LE FICHIER A ZERO, alors il l allonge. Mesure du
+//    23/08/2026 : la base a grossi de 28 Mo en trois minutes pendant que son journal
+//    prenait 1 Go. Trente-six fois la donnee reelle, parce qu une meme page reecrite
+//    cent fois occupe cent places dans le journal tant qu il n est pas remis a zero.
+//    Le plafond ci-dessous fait tronquer le fichier des qu une remise a zero devient
+//    possible ; c est le fichier PAUSE, plus bas, qui la rend possible.
+bd.exec("PRAGMA journal_size_limit = 536870912");
+
 bd.exec(`
 -- ⛔ « priorite » N EST PAS UN CONFORT, C EST CE QUI REND LE ROBOT UTILE.
 --    Sans elle, la file melange les 36 891 domaines referents d un geant du secteur et
@@ -514,9 +525,27 @@ function prochaine() {
     return null;
   }
 }
+// ⛔ LE FICHIER PAUSE EST CE QUI PERMET AU JOURNAL DE SE VIDER.
+//    Une remise a zero du journal WAL exige qu aucune transaction de lecture ne soit
+//    ouverte, et cent vingt lecteurs n offrent jamais ce trou. Le gardien pose alors
+//    C:igiePAUSE : chaque lecteur finit sa page, se range, et le trou existe. Le
+//    gardien vide le journal et retire le fichier. Aucune page n est perdue, l etat vit
+//    en base.
+//    ⛔ ET UNE PAUSE VIEILLE DE PLUS DE DIX MINUTES EST IGNOREE. Si le gardien meurt
+//       entre la pose et le retrait, le moteur entier dormirait pour toujours en
+//       attendant un fichier que plus personne ne viendra effacer.
+const FICHIER_PAUSE = path.join(DOSSIER, "..", "PAUSE");
+function enPause() {
+  try {
+    const t = fs.statSync(FICHIER_PAUSE).mtimeMs;
+    return Date.now() - t < 600000;
+  } catch { return false; }
+}
+
 async function lecteur() {
   for (;;) {
     if (PAGES_MAX && pagesLues >= PAGES_MAX) return;
+    if (enPause()) { await new Promise((s) => setTimeout(s, 2000)); continue; }
     const ligne = prochaine();
     if (!ligne) { await new Promise((s) => setTimeout(s, 1200)); continue; }
     try {
