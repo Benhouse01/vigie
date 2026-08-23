@@ -69,6 +69,21 @@ process.on("unhandledRejection", (e) => {
 fs.mkdirSync(DOSSIER, { recursive: true });
 const bd = new DatabaseSync(BD);
 
+// ⛔ SANS busy_timeout, DEUX ROBOTS SUR LA MEME BASE SE JETTENT DES « database is
+//    locked » A LA FIGURE. En WAL un seul ecrit a la fois ; le second doit attendre son
+//    tour, pas abandonner. Trente secondes couvrent largement une ecriture de page.
+//
+// ⛔ ET IL SE POSE EN PREMIER, AVANT TOUTE AUTRE PRAGMA. « journal_mode = WAL » reclame
+//    un verrou exclusif le temps de basculer le journal ; si l autre robot ecrit a cette
+//    seconde-la, SQLite rend « database is locked » IMMEDIATEMENT tant que le delai
+//    d attente n est pas pose. L exception part alors du corps du module : plus rien
+//    n est programme dans la boucle d evenements, le filet uncaughtException ecrit UNE
+//    ligne, et node sort avec le code 0. Une mort propre et silencieuse, qu une tache
+//    planifiee « au demarrage du systeme » ne rattrape jamais. C est ce qui a tue le
+//    robot du large le 21/08/2026 a 20h45 UTC : il est reste couche 43 heures pendant
+//    que l ecran public affichait un moteur « en direct ».
+bd.exec("PRAGMA busy_timeout = 30000");
+
 // ⛔ WAL ET synchronous=NORMAL, SINON LE ROBOT PASSE SON TEMPS A ATTENDRE LE DISQUE.
 //    En mode journal par defaut, chaque page ecrite force une synchronisation complete :
 //    mesure a une page par seconde au lieu de trente.
@@ -76,11 +91,6 @@ bd.exec("PRAGMA journal_mode = WAL");
 bd.exec("PRAGMA synchronous = NORMAL");
 bd.exec("PRAGMA temp_store = MEMORY");
 bd.exec("PRAGMA cache_size = -200000");
-
-// ⛔ SANS busy_timeout, DEUX ROBOTS SUR LA MEME BASE SE JETTENT DES « database is
-//    locked » A LA FIGURE. En WAL un seul ecrit a la fois ; le second doit attendre son
-//    tour, pas abandonner. Trente secondes couvrent largement une ecriture de page.
-bd.exec("PRAGMA busy_timeout = 30000");
 
 bd.exec(`
 -- ⛔ « priorite » N EST PAS UN CONFORT, C EST CE QUI REND LE ROBOT UTILE.
@@ -296,11 +306,30 @@ const noterLien = bd.prepare(
    ON CONFLICT(url_src, url_dest) DO UPDATE SET rel = excluded.rel, ancre = excluded.ancre, vu_le = excluded.vu_le`
 );
 
+// ⛔ UN SEUL HOTE NE DOIT JAMAIS POSSEDER UNE BANDE ENTIERE.
+//    La politesse n autorise qu une requete en vol par hote. Le jour ou tout ce qui
+//    reste en attente dans une bande appartient au meme site, les soixante lecteurs se
+//    disputent un seul creneau et le moteur entier tombe a la cadence de ce site.
+//    Mesure du 23/08/2026 : la bande de la niche ne contenait plus qu arxiv.org, 14 588
+//    URL, et le robot lisait DEUX pages par minute la ou il en lisait cent trente.
+//    Le plafond compte les pages EN ATTENTE, jamais les pages lues : un gros site se
+//    crawle toujours en entier, mais par vagues, en laissant passer les autres entre.
+const PLAFOND_HOTE = Number(arg("plafond-hote", 1500));
+const enAttenteParHote = new Map();
+const compterAttente = bd.prepare("SELECT COUNT(*) AS n FROM file WHERE hote = ? AND etat = 'attente'");
+function attenteDe(hote) {
+  let n = enAttenteParHote.get(hote);
+  if (n === undefined) { n = compterAttente.get(hote)?.n || 0; enAttenteParHote.set(hote, n); }
+  return n;
+}
+
 function enfiler(url, profondeur, priorite = 3) {
   const hote = domaineDe(url);
   if (!hote) return false;
   try { if (EXTENSIONS_MORTES.test(new URL(url).pathname)) return false; } catch { return false; }
-  ajouter.run(url, hote, profondeur, priorite, new Date().toISOString());
+  if (attenteDe(hote) >= PLAFOND_HOTE) return false;
+  const pose = ajouter.run(url, hote, profondeur, priorite, new Date().toISOString());
+  if (pose.changes) enAttenteParHote.set(hote, attenteDe(hote) + 1);
   remonter.run(priorite, url, priorite);
   return true;
 }
@@ -414,6 +443,8 @@ async function traiter(ligne) {
 
   marquer.run("lu", maintenant, url);
   bd.prepare("UPDATE hotes SET pages_lues = pages_lues + 1, dernier_le = ? WHERE hote = ?").run(maintenant, hote);
+  // Une page lue est une place rendue sous le plafond de cet hote.
+  if (enAttenteParHote.has(hote)) enAttenteParHote.set(hote, Math.max(0, enAttenteParHote.get(hote) - 1));
 }
 
 /**
@@ -442,6 +473,22 @@ const choisir = bd.prepare(
   "  SELECT 1 FROM hotes h WHERE h.hote = f.hote AND h.occupe_jusqu_a > ?" +
   ") ORDER BY f.priorite ASC, f.profondeur ASC, f.rowid ASC LIMIT 1"
 );
+// ⛔ UN LECTEUR QUI NE TROUVE RIEN DANS SA BANDE NE DOIT PAS DORMIR.
+//    Sa bande peut etre vide, ou n avoir que des hotes en cours de politesse. Dans les
+//    deux cas il reste des dizaines de milliers de pages a lire un cran plus bas, et
+//    soixante lecteurs qui tournent a vide ne rapportent rien a personne.
+//    Le repli ne va QUE vers les priorites MOINS importantes, jamais l inverse : le
+//    robot du large ne remontera donc jamais chercher la niche. La doctrine tient, la
+//    niche passe toujours en premier, et quand elle n a rien a donner ses lecteurs
+//    elargissent au lieu d attendre.
+const REPLI = arg("repli", "1") !== "0" && PRIO_MAX < 9;
+const choisirRepli = REPLI ? bd.prepare(
+  "SELECT f.url, f.hote, f.profondeur, f.priorite FROM file f " +
+  "WHERE f.etat = 'attente' AND f.priorite BETWEEN " + (PRIO_MAX + 1) + " AND 9 AND NOT EXISTS (" +
+  "  SELECT 1 FROM hotes h WHERE h.hote = f.hote AND h.occupe_jusqu_a > ?" +
+  ") ORDER BY f.priorite ASC, f.profondeur ASC, f.rowid ASC LIMIT 1"
+) : null;
+
 const reserverPage = bd.prepare("UPDATE file SET etat = 'encours', lu_le = ? WHERE url = ? AND etat = 'attente'");
 const reserverHote = bd.prepare(
   "INSERT INTO hotes (hote, occupe_jusqu_a) VALUES (?, ?) ON CONFLICT(hote) DO UPDATE SET occupe_jusqu_a = excluded.occupe_jusqu_a"
@@ -452,7 +499,8 @@ function prochaine() {
   const maintenant = new Date().toISOString();
   try {
     bd.exec("BEGIN IMMEDIATE");
-    const ligne = choisir.get(maintenant);
+    let ligne = choisir.get(maintenant);
+    if (!ligne && choisirRepli) ligne = choisirRepli.get(maintenant);
     if (!ligne) { bd.exec("COMMIT"); return null; }
     const pris = reserverPage.run(maintenant, ligne.url);
     if (!pris.changes) { bd.exec("COMMIT"); return null; }
