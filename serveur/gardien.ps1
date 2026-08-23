@@ -1,4 +1,4 @@
-# LE GARDIEN DE VIGIE. Toutes les cinq minutes, il verifie que le moteur est vivant,
+# LE GARDIEN DE VIGIE. Toutes les deux minutes, il verifie que le moteur est vivant,
 # que le disque tient, et que le journal de la base ne devore pas la machine.
 #
 # ⛔ IL NE REGARDE PAS L ETAT DE LA TACHE PLANIFIEE, IL REGARDE LE PROCESSUS.
@@ -26,12 +26,33 @@ if ($libre -lt 4) {
 if ($libre -lt 8) { & $dire "disque : $libre Go libres, le frein tombe a 4" }
 
 # Les quatre processus du moteur, et la tache qui les remet debout.
+# DECISION DE BENJAMIN, 23/08/2026 : LES DEUX ROBOTS DE CRAWL SONT ARRETES.
+#    Motif de fond, pas incident : un index general du web ne tient pas sur ce disque.
+#    Mesure du jour a pleine cadence, 15 Go par jour pour 62 500 liens la minute, dont
+#    la quasi-totalite ne vise aucun domaine suivi (arxiv.org : 68 287 liens notes,
+#    ZERO vers une cible). Le stockage se paie, et personne ne rattrape un robot qui
+#    lit 7,5 milliards de pages par jour. Ce que Vigie garde ne se crawle pas : Bing
+#    Webmaster pour les domaines referents des concurrents, Search Console pour le reel
+#    sur nos domaines, le graphe Common Crawl deja pose sur ce serveur, et la lecture
+#    du rel sur les liens deja connus.
+#    ⛔ LES DEUX ROBOTS NE SONT DONC PLUS DANS CETTE LISTE. Les y remettre les relance
+#       dans les deux minutes, et le disque repart a 15 Go par jour.
 $attendus = @(
-  @{ motif = '*--instance=niche*'; tache = 'VigieRobotNiche';  nom = 'robot niche'  },
-  @{ motif = '*--instance=large*'; tache = 'VigieRobotLarge';  nom = 'robot large'  },
   @{ motif = '*pousser-liens*';    tache = 'VigiePousseur';    nom = 'pousseur'     },
   @{ motif = '*rapporter.mjs*';    tache = 'VigieRapporteur';  nom = 'rapporteur'   }
-)
+).Free / 1GB, 2)
+if ($libre -lt 4) {
+  & $dire "FREIN DISQUE : $libre Go libres. Les deux robots sont couches. Faire de la place, puis schtasks /run /tn VigieRobotNiche et VigieRobotLarge"
+  & schtasks /end /tn VigieRobotNiche 2>&1 | Out-Null
+  & schtasks /end /tn VigieRobotLarge 2>&1 | Out-Null
+  Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*crawler.mjs*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  exit 0
+}
+if ($libre -lt 8) { & $dire "disque : $libre Go libres, le frein tombe a 4" }
+
+# Les quatre processus du moteur, et la tache qui les remet debout.
 $procs = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue)
 foreach ($a in $attendus) {
   $vivant = $procs | Where-Object { $_.CommandLine -like $a.motif }
@@ -59,7 +80,7 @@ foreach ($a in $attendus) {
 #    essai ne suffit donc pas ; cinq essais espaces de huit secondes couvrent leur passe.
 $wal = 'C:\vigie\donnees\index.sqlite-wal'
 $walGo = if (Test-Path $wal) { [math]::Round((Get-Item $wal).Length / 1GB, 2) } else { 0 }
-if ($walGo -gt 1.5) {
+if ($walGo -gt 1.2) {
   & $dire "journal WAL a $walGo Go : mise en pause des lecteurs le temps de le vider"
   New-Item -ItemType File -Path 'C:\vigie\PAUSE' -Force | Out-Null
   Start-Sleep -Seconds 12
